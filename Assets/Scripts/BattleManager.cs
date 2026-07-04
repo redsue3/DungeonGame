@@ -27,6 +27,7 @@ public class BattleManager : MonoBehaviour
         enemies = new List<Enemy>(enemyList);
         usedOnceRelics.Clear();
         player.deck.ResetForBattle();
+        HungerSystem.OnBattleStart(player);
         ApplyRelicTrigger(RelicTrigger.OnBattleStart);
         StartCoroutine(BattleLoop());
     }
@@ -34,6 +35,8 @@ public class BattleManager : MonoBehaviour
     // 개별 조우 편의 오버로드
     public void StartBattle(PlayerCharacter playerCharacter, Enemy enemy)
         => StartBattle(playerCharacter, new List<Enemy> { enemy });
+
+    private bool playerTurnEnded = false;
 
     private IEnumerator BattleLoop()
     {
@@ -53,6 +56,7 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator PlayerTurn()
     {
+        playerTurnEnded = false;
         player.OnTurnStart();
         currentMana = player.maxMana;
         player.deck.DrawCards(player.startHandSize);
@@ -65,9 +69,10 @@ public class BattleManager : MonoBehaviour
         }
         Debug.Log($"=== 플레이어 턴 | 마나:{currentMana}/{player.maxMana} | HP:{player.currentHp}/{player.maxHp} ===");
         LogHand();
+        NotifyUI();
 
-        // TODO: UI 입력 대기로 교체
-        yield return new WaitForSeconds(0.5f);
+        // UI에서 EndPlayerTurn() 호출 때까지 대기
+        yield return new WaitUntil(() => playerTurnEnded || state == BattleState.Win);
     }
 
     private void NotifyUI() => UIManager.Instance?.RefreshBattle();
@@ -95,11 +100,13 @@ public class BattleManager : MonoBehaviour
         Debug.Log($"[{card.cardName}] 사용 | 남은 마나:{currentMana}");
 
         // 처치 판정 → OnKill 유물 발동
-        foreach (Enemy e in enemies)
+        for (int i = 0; i < enemies.Count; i++)
         {
-            if (!e.IsAlive && !usedOnceRelics.Contains("killed_" + e.characterName))
+            Enemy e = enemies[i];
+            string killKey = "killed_" + i;
+            if (!e.IsAlive && !usedOnceRelics.Contains(killKey))
             {
-                usedOnceRelics.Add("killed_" + e.characterName);
+                usedOnceRelics.Add(killKey);
                 ApplyRelicTrigger(RelicTrigger.OnKill);
             }
         }
@@ -115,6 +122,7 @@ public class BattleManager : MonoBehaviour
         if (state != BattleState.PlayerTurn) return;
         player.deck.DiscardHand();
         state = BattleState.EnemyTurn;
+        playerTurnEnded = true;
         NotifyUI();
     }
 
@@ -152,10 +160,7 @@ public class BattleManager : MonoBehaviour
     {
         if (state == BattleState.Win)
         {
-            int gold = 0;
-            foreach (Enemy e in enemies) gold += e.RollGoldReward();
-            Debug.Log($"승리! 골드 +{gold}");
-            player.gold += gold;
+            Debug.Log("승리!");
             DungeonManager.Instance?.OnBattleWon();
         }
         else

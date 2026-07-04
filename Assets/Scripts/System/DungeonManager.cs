@@ -37,6 +37,13 @@ public class DungeonManager : MonoBehaviour
         MapTile tile = CurrentMap.TryMove(dx, dy);
         if (tile == null) return;
 
+        HungerSystem.OnPlayerMove(Player);
+        if (!Player.IsAlive)
+        {
+            TransitionTo(GameState.GameOver);
+            return;
+        }
+
         if (tile.HasEnemy)
         {
             currentBattleTile = tile;
@@ -75,13 +82,21 @@ public class DungeonManager : MonoBehaviour
         Player.gold += gold;
         Debug.Log($"[DungeonManager] 전투 승리! 골드 +{gold}");
 
+        string foodId = LootTable.RollFoodDrop(currentLayer);
+        if (foodId != null)
+        {
+            Player.inventory.AddFood(foodId);
+            Debug.Log($"[DungeonManager] 식료품 획득: {FoodDatabase.Get(foodId)?.displayName}");
+        }
+
         bool isBoss = currentBattleTile?.type == TileType.Boss;
-        int  cardCount = isBoss ? 3 : (currentBattleTile?.type == TileType.EliteEnemy ? 2 : 2);
+        int  cardCount = isBoss ? 3 : (currentBattleTile?.type == TileType.EliteEnemy ? 2 : 1);
 
         pendingReward = new BattleReward
         {
             cardChoices = LootTable.RollCardRewards(currentLayer, cardCount),
-            gold        = gold
+            gold        = gold,
+            foodId      = foodId,
         };
 
         if (isBoss && currentLayer >= 3)
@@ -149,6 +164,19 @@ public class DungeonManager : MonoBehaviour
         bool removed = shop.RemoveCard(cardId, Player);
         if (removed) shopCardRemovePurchased = false;
         return removed;
+    }
+
+    // 식료품 섭취 - 인벤토리 UI에서 호출
+    public bool UseFoodItem(string foodId)
+    {
+        FoodData food = FoodDatabase.Get(foodId);
+        if (food == null) return false;
+        if (!Player.inventory.RemoveFood(foodId)) return false;
+
+        Player.ChangeHunger(food.hungerRestore);
+        Debug.Log($"[DungeonManager] {food.displayName} 섭취 → 배고픔 +{food.hungerRestore} (현재 {Player.hunger}/{Player.maxHunger})");
+        SaveSystem.Save(Player, currentLayer);
+        return true;
     }
 
     public ShopSystem GetShop() => shop;

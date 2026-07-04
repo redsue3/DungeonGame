@@ -38,7 +38,7 @@ public class Character
 
     public void ResetBlock() => block = 0;
 
-    public void Heal(int amount)
+    public virtual void Heal(int amount)
     {
         currentHp = Mathf.Min(maxHp, currentHp + amount);
         Debug.Log($"{characterName}: 체력 +{amount} → HP {currentHp}/{maxHp}");

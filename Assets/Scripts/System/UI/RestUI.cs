@@ -6,6 +6,7 @@ public class RestUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI playerHpText;
     [SerializeField] private TextMeshProUGUI healPreviewText;
+    [SerializeField] private TextMeshProUGUI hungerCostText;
     [SerializeField] private Button          restBtn;
     [SerializeField] private Button          leaveBtn;
 
@@ -32,6 +33,11 @@ public class RestUI : MonoBehaviour
 
         playerHpText.text    = $"현재 HP  {p.currentHp} / {p.maxHp}";
         healPreviewText.text = $"휴식하면 HP +{healAmount}  →  {healedHp}";
+
+        if (hungerCostText != null && p.currentHp < p.maxHp)
+            hungerCostText.text = $"배고픔 -{HungerSystem.HealHungerCost(healAmount)}";
+        else if (hungerCostText != null)
+            hungerCostText.text = "";
 
         restBtn.interactable = p.currentHp < p.maxHp;
     }

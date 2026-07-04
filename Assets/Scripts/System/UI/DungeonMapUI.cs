@@ -14,6 +14,11 @@ public class DungeonMapUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI playerHpText;
     [SerializeField] private TextMeshProUGUI playerGoldText;
     [SerializeField] private TextMeshProUGUI playerRelicsText;
+    [SerializeField] private TextMeshProUGUI playerHungerText;
+
+    [Header("인벤토리")]
+    [SerializeField] private InventoryUI inventoryUI;
+    [SerializeField] private Button      inventoryBtn;
 
     private readonly List<GameObject> tileObjects = new List<GameObject>();
 
@@ -40,7 +45,16 @@ public class DungeonMapUI : MonoBehaviour
         [TileType.Empty]       = new Color(0.3f, 0.3f, 0.35f),
     };
 
-    void OnEnable() => Refresh();
+    void OnEnable()
+    {
+        inventoryBtn?.onClick.AddListener(() => inventoryUI?.Open());
+        Refresh();
+    }
+
+    void OnDisable()
+    {
+        inventoryBtn?.onClick.RemoveAllListeners();
+    }
 
     public void Refresh()
     {
@@ -59,6 +73,8 @@ public class DungeonMapUI : MonoBehaviour
 
         playerHpText.text    = $"HP  {p.currentHp} / {p.maxHp}";
         playerGoldText.text  = $"골드  {p.gold}";
+        if (playerHungerText != null)
+            playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " ⚠" : "");
 
         var relicNames = new System.Text.StringBuilder();
         foreach (string id in p.relics.GetAll())

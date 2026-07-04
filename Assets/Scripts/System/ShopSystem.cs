@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum ShopItemType { Card, Relic, RemoveCard }
+public enum ShopItemType { Card, Relic, RemoveCard, Food }
 
 public class ShopItem
 {
@@ -39,6 +39,15 @@ public class ShopSystem
             RelicData relicData = RelicDatabase.Get(relicId);
             int price = relicData != null && relicPrices.TryGetValue(relicData.rarity, out int p) ? p : 150;
             Items.Add(new ShopItem { type = ShopItemType.Relic, id = relicId, price = price });
+        }
+
+        // 식료품 2개
+        List<string> foodIds = RollRandomFoods(2);
+        foreach (string id in foodIds)
+        {
+            FoodData food = FoodDatabase.Get(id);
+            if (food != null)
+                Items.Add(new ShopItem { type = ShopItemType.Food, id = id, price = food.price });
         }
 
         // 카드 제거 서비스
@@ -83,6 +92,11 @@ public class ShopSystem
             case ShopItemType.RemoveCard:
                 Debug.Log("[상점] 카드 제거 서비스 구매 — UI에서 제거할 카드 선택 후 DungeonManager.RemoveCardFromDeck() 호출");
                 break;
+
+            case ShopItemType.Food:
+                player.inventory.AddFood(item.id);
+                Debug.Log($"[상점] 식료품 구매: {FoodDatabase.Get(item.id)?.displayName}");
+                break;
         }
         return true;
     }
@@ -103,5 +117,14 @@ public class ShopSystem
         List<RelicData> available = all.FindAll(r => !player.relics.Has(r.id));
         if (available.Count == 0) return null;
         return available[Random.Range(0, available.Count)].id;
+    }
+
+    private List<string> RollRandomFoods(int count)
+    {
+        List<FoodData>  all    = FoodDatabase.GetAll();
+        List<string>    result = new List<string>();
+        for (int i = 0; i < count && all.Count > 0; i++)
+            result.Add(all[Random.Range(0, all.Count)].id);
+        return result;
     }
 }

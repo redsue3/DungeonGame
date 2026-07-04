@@ -14,8 +14,12 @@ public class SaveData
     public int   burnStack;
     public int   strengthStack;
     public int   dexterityStack;
+    public int   hunger;
+    public int   maxHunger;
     public string[] deckCardIds;
     public string[] relicIds;
+    public string[] foodIds;
+    public int[]    foodCounts;
 }
 
 public static class SaveSystem
@@ -36,8 +40,12 @@ public static class SaveSystem
             burnStack      = player.burnStack,
             strengthStack  = player.strengthStack,
             dexterityStack = player.dexterityStack,
+            hunger         = player.hunger,
+            maxHunger      = player.maxHunger,
             deckCardIds    = ExtractDeckIds(player.deck),
             relicIds       = player.relics.GetAll().ToArray(),
+            foodIds        = ExtractFoodIds(player.inventory),
+            foodCounts     = ExtractFoodCounts(player.inventory),
         };
 
         File.WriteAllText(SavePath, JsonUtility.ToJson(data, prettyPrint: true));
@@ -72,6 +80,8 @@ public static class SaveSystem
         player.burnStack     = data.burnStack;
         player.strengthStack = data.strengthStack;
         player.dexterityStack= data.dexterityStack;
+        player.hunger        = data.maxHunger > 0 ? data.hunger    : HungerSystem.MaxHunger;
+        player.maxHunger      = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
 
         // 덱 복원
         player.deck = new Deck();
@@ -85,6 +95,17 @@ public static class SaveSystem
         foreach (string relicId in data.relicIds)
             player.relics.Add(relicId);
 
+        // 인벤토리(식료품) 복원
+        player.inventory = new Inventory();
+        if (data.foodIds != null)
+        {
+            for (int i = 0; i < data.foodIds.Length; i++)
+            {
+                int count = (data.foodCounts != null && i < data.foodCounts.Length) ? data.foodCounts[i] : 1;
+                player.inventory.AddFood(data.foodIds[i], count);
+            }
+        }
+
         return player;
     }
 
@@ -95,5 +116,23 @@ public static class SaveSystem
         for (int i = 0; i < cards.Count; i++)
             ids[i] = cards[i].id;
         return ids;
+    }
+
+    private static string[] ExtractFoodIds(Inventory inventory)
+    {
+        var all = inventory.GetAll();
+        var ids = new string[all.Count];
+        for (int i = 0; i < all.Count; i++)
+            ids[i] = all[i].id;
+        return ids;
+    }
+
+    private static int[] ExtractFoodCounts(Inventory inventory)
+    {
+        var all    = inventory.GetAll();
+        var counts = new int[all.Count];
+        for (int i = 0; i < all.Count; i++)
+            counts[i] = all[i].count;
+        return counts;
     }
 }

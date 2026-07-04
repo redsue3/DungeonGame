@@ -14,6 +14,10 @@ public static class PlayerFactory
                 player.deck.AddCard(card);
         }
 
+        // 시작 식료품
+        player.inventory.AddFood("bread");
+        player.inventory.AddFood("apple");
+
         return player;
     }
 }

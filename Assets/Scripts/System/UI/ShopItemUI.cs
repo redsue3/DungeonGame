@@ -34,6 +34,13 @@ public class ShopItemUI : MonoBehaviour
                 itemDescText.text = "덱에서 카드 1장을 영구 제거합니다";
                 tagText.text      = "서비스";
                 break;
+
+            case ShopItemType.Food:
+                FoodData food = FoodDatabase.Get(item.id);
+                itemNameText.text = food != null ? food.displayName : item.id;
+                itemDescText.text = food != null ? food.description : "";
+                tagText.text      = "식료품";
+                break;
         }
 
         priceText.text  = $"{item.price} G";

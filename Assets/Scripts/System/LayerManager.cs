@@ -144,6 +144,7 @@ public class LayerManager : MonoBehaviour
         {
             cardChoices = LootTable.RollCardRewards(currentLayer, cardCount),
             gold        = LootTable.RollGold(currentLayer),
+            foodId      = LootTable.RollFoodDrop(currentLayer),
         };
     }
 }
@@ -152,4 +153,5 @@ public class BattleReward
 {
     public List<string> cardChoices;
     public int          gold;
+    public string        foodId;   // 획득한 식료품 (없으면 null)
 }

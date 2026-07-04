@@ -61,6 +61,15 @@ public static class LootTable
         [4] = (50, 70),
     };
 
+    private static readonly Dictionary<int, string[]> foodPool = new Dictionary<int, string[]>
+    {
+        [1] = new[] { "apple", "bread", "cheese" },
+        [2] = new[] { "bread", "cheese", "dried_meat" },
+        [3] = new[] { "dried_meat", "ration", "feast" },
+    };
+
+    private const float FoodDropChance = 0.5f;
+
     public static List<string> RollCardRewards(int layer, int count)
     {
         int resolvedLayer = Mathf.Clamp(layer, 1, cardPool.Count);
@@ -102,4 +111,13 @@ public static class LootTable
     }
 
     public static int GetCardRewardCount(int layer) => 1 + layer;
+
+    // 전투 승리 시 카드 보상과 별개로 식료품을 얻을 수도 있다 (없으면 null)
+    public static string RollFoodDrop(int layer)
+    {
+        if (Random.value > FoodDropChance) return null;
+        int resolvedLayer = Mathf.Clamp(layer, 1, foodPool.Count);
+        string[] pool = foodPool[resolvedLayer];
+        return pool[Random.Range(0, pool.Length)];
+    }
 }
