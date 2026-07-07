@@ -145,6 +145,7 @@
     <Compile Include="Assets\Scripts\Data\FoodData.cs" />
     <Compile Include="Assets\Scripts\Database\LootTable.cs" />
     <Compile Include="Assets\Scripts\Map\DungeonMap.cs" />
+    <Compile Include="Assets\Scripts\Map\MapNode.cs" />
     <Compile Include="Assets\Scripts\Deck.cs" />
     <Compile Include="Assets\Scripts\Animation\Warrior\WarriorAnimator.cs" />
     <Compile Include="Assets\Scripts\System\UI\RewardUI.cs" />

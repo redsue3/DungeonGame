@@ -9,20 +9,3 @@ public enum TileType
     Shop,          // 상점
     Shrine,        // 성소 - 캐릭터 이벤트, 카드 제작
 }
-
-public class MapTile
-{
-    public TileType  type      = TileType.Empty;
-    public bool      isCleared = false;
-    public string[]  enemyIds  = new string[0];
-
-    public bool HasEnemy =>
-        !isCleared && (
-            type == TileType.NormalEnemy ||
-            type == TileType.GroupEnemy  ||
-            type == TileType.EliteEnemy  ||
-            type == TileType.Boss
-        );
-
-    public bool IsGroup => type == TileType.GroupEnemy;
-}

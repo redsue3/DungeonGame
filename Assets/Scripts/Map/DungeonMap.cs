@@ -1,40 +1,38 @@
+using System.Collections.Generic;
+using System.Linq;
+
+// 층(floor)별로 나뉜 노드들을 간선(next)으로 연결한 분기형 던전 맵.
+// 예전엔 9x7 네모 그리드에 인접칸 이동이었지만, 지금은 실제로 이어진 노드로만 이동 가능하다.
 public class DungeonMap
 {
-    public const int WIDTH  = 9;
-    public const int HEIGHT = 7;
+    public int Layer      { get; }
+    public int FloorCount { get; }
+    public List<MapNode> Nodes { get; } = new List<MapNode>();
 
-    private readonly MapTile[,] tiles = new MapTile[WIDTH, HEIGHT];
+    // -1 = 아직 입장 전. 0층 노드 중 하나를 선택해야 런이 시작된다.
+    public int CurrentNodeId { get; private set; } = -1;
 
-    public int PlayerX { get; private set; }
-    public int PlayerY { get; private set; }
-    public int Layer   { get; }
-
-    public DungeonMap(int layer)
+    public DungeonMap(int layer, int floorCount)
     {
-        Layer = layer;
-        for (int x = 0; x < WIDTH;  x++)
-        for (int y = 0; y < HEIGHT; y++)
-            tiles[x, y] = new MapTile();
+        Layer      = layer;
+        FloorCount = floorCount;
     }
 
-    public MapTile this[int x, int y] => tiles[x, y];
+    public MapNode GetNode(int id) => Nodes.FirstOrDefault(n => n.id == id);
+    public MapNode CurrentNode     => CurrentNodeId >= 0 ? GetNode(CurrentNodeId) : null;
 
-    public MapTile PlayerTile => tiles[PlayerX, PlayerY];
+    public IEnumerable<MapNode> NodesOnFloor(int floor) => Nodes.Where(n => n.floor == floor);
 
-    public bool InBounds(int x, int y) => x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
+    // 지금 위치에서 다음으로 갈 수 있는 노드들 (입장 전이면 0층 전체가 선택지)
+    public IEnumerable<MapNode> ReachableNodes()
+        => CurrentNodeId < 0 ? NodesOnFloor(0) : CurrentNode.next.Select(GetNode);
 
-    public void SetTile(int x, int y, MapTile tile) => tiles[x, y] = tile;
+    public bool CanMoveTo(int nodeId) => ReachableNodes().Any(n => n.id == nodeId);
 
-    public void SetPlayer(int x, int y) { PlayerX = x; PlayerY = y; }
-
-    // 이동 시도. 이동 불가 시 null 반환
-    public MapTile TryMove(int dx, int dy)
+    public MapNode TryMoveTo(int nodeId)
     {
-        int nx = PlayerX + dx;
-        int ny = PlayerY + dy;
-        if (!InBounds(nx, ny)) return null;
-        PlayerX = nx;
-        PlayerY = ny;
-        return PlayerTile;
+        if (!CanMoveTo(nodeId)) return null;
+        CurrentNodeId = nodeId;
+        return CurrentNode;
     }
 }

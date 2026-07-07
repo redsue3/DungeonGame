@@ -349,14 +349,10 @@ public static class SceneSetup
         var inventoryBtn = Btn(topBar.transform, "InventoryBtn", "인벤토리", BtnYellow, out _);
         inventoryBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 150;
 
+        // 분기형 맵은 레이아웃 그룹 없이 DungeonMapUI가 층(floor)/가로위치(x) 기준으로
+        // 노드와 연결선을 직접 배치한다 (그리드로 고정하지 않음).
         GameObject gridArea = NewGO("GridArea", panel.transform);
-        Anchor(gridArea.GetComponent<RectTransform>(), new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.9f), Vector2.zero, Vector2.zero);
-        var grid = gridArea.AddComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(80, 80);
-        grid.spacing = new Vector2(6, 6);
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = DungeonMap.WIDTH;
-        grid.childAlignment = TextAnchor.MiddleCenter;
+        Anchor(gridArea.GetComponent<RectTransform>(), new Vector2(0.05f, 0.1f), new Vector2(0.95f, 0.88f), Vector2.zero, Vector2.zero);
 
         var ui = panel.AddComponent<DungeonMapUI>();
         Bind(ui, "tilePrefab", tilePrefab);

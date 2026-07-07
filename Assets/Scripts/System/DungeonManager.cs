@@ -13,7 +13,7 @@ public class DungeonManager : MonoBehaviour
     public int             CurrentLayer  => currentLayer;
 
     private int            currentLayer = 1;
-    private MapTile        currentBattleTile;
+    private MapNode        currentBattleNode;
     private BattleReward   pendingReward;
     private ShopSystem     shop = new ShopSystem();
     private bool           shopCardRemovePurchased = false;
@@ -30,13 +30,13 @@ public class DungeonManager : MonoBehaviour
         TransitionTo(GameState.DungeonMap);
     }
 
-    // 플레이어 이동 - 맵 UI에서 호출 (dx, dy: -1/0/1)
-    public void MovePlayer(int dx, int dy)
+    // 플레이어 이동 - 맵 UI에서 호출 (nodeId: 지금 위치에서 이어진 노드만 가능)
+    public void MoveToNode(int nodeId)
     {
         if (CurrentState != GameState.DungeonMap) return;
 
-        MapTile tile = CurrentMap.TryMove(dx, dy);
-        if (tile == null) return;
+        MapNode node = CurrentMap.TryMoveTo(nodeId);
+        if (node == null) return;
 
         HungerSystem.OnPlayerMove(Player);
         if (!Player.IsAlive)
@@ -45,12 +45,12 @@ public class DungeonManager : MonoBehaviour
             return;
         }
 
-        if (tile.HasEnemy)
+        if (node.HasEnemy)
         {
-            currentBattleTile = tile;
+            currentBattleNode = node;
 
             var enemyList = new List<Enemy>();
-            foreach (string id in tile.enemyIds)
+            foreach (string id in node.enemyIds)
             {
                 Enemy e = EnemyFactory.Create(id);
                 if (e != null) enemyList.Add(e);
@@ -59,21 +59,21 @@ public class DungeonManager : MonoBehaviour
             BattleManager.Instance.StartBattle(Player, enemyList);
             TransitionTo(GameState.Battle);
         }
-        else if (tile.type == TileType.Rest && !tile.isCleared)
+        else if (node.type == TileType.Rest && !node.isCleared)
         {
-            currentBattleTile = tile;
+            currentBattleNode = node;
             TransitionTo(GameState.Rest);
         }
-        else if (tile.type == TileType.Shop && !tile.isCleared)
+        else if (node.type == TileType.Shop && !node.isCleared)
         {
-            currentBattleTile = tile;
+            currentBattleNode = node;
             shop.Generate(currentLayer, Player);
             shopCardRemovePurchased = false;
             TransitionTo(GameState.Shop);
         }
-        else if (tile.type == TileType.Shrine && !tile.isCleared)
+        else if (node.type == TileType.Shrine && !node.isCleared)
         {
-            currentBattleTile = tile;
+            currentBattleNode = node;
             pendingShrineOptions = ShrineSystem.GenerateOptions(Player);
             TransitionTo(GameState.Shrine);
         }
@@ -82,8 +82,8 @@ public class DungeonManager : MonoBehaviour
     // BattleManager에서 호출
     public void OnBattleWon()
     {
-        if (currentBattleTile != null)
-            currentBattleTile.isCleared = true;
+        if (currentBattleNode != null)
+            currentBattleNode.isCleared = true;
 
         int gold = RelicDatabase.ApplyGoldBonus(LootTable.RollGold(currentLayer), Player);
         Player.gold += gold;
@@ -96,8 +96,8 @@ public class DungeonManager : MonoBehaviour
             Debug.Log($"[DungeonManager] 식료품 획득: {FoodDatabase.Get(foodId)?.displayName}");
         }
 
-        bool isBoss  = currentBattleTile?.type == TileType.Boss;
-        bool isElite = currentBattleTile?.type == TileType.EliteEnemy;
+        bool isBoss  = currentBattleNode?.type == TileType.Boss;
+        bool isElite = currentBattleNode?.type == TileType.EliteEnemy;
         int  cardCount = isBoss ? 3 : (isElite ? 2 : 1);
 
         string relicId = null;
@@ -161,7 +161,7 @@ public class DungeonManager : MonoBehaviour
     {
         int heal = Mathf.RoundToInt(Player.maxHp * 0.3f);
         Player.Heal(heal);
-        if (currentBattleTile != null) currentBattleTile.isCleared = true;
+        if (currentBattleNode != null) currentBattleNode.isCleared = true;
         SaveSystem.Save(Player, currentLayer);
         TransitionTo(GameState.DungeonMap);
     }
@@ -213,7 +213,7 @@ public class DungeonManager : MonoBehaviour
         Player.deck.AddCard(card);
         Debug.Log($"[DungeonManager] 성소에서 카드 제작: {card.cardName}");
 
-        if (currentBattleTile != null) currentBattleTile.isCleared = true;
+        if (currentBattleNode != null) currentBattleNode.isCleared = true;
         pendingShrineOptions = null;
         SaveSystem.Save(Player, currentLayer);
         TransitionTo(GameState.DungeonMap);
@@ -222,7 +222,7 @@ public class DungeonManager : MonoBehaviour
 
     public void LeaveShop()
     {
-        if (currentBattleTile != null) currentBattleTile.isCleared = true;
+        if (currentBattleNode != null) currentBattleNode.isCleared = true;
         SaveSystem.Save(Player, currentLayer);
         TransitionTo(GameState.DungeonMap);
     }
