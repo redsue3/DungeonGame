@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum GameState { CharacterSelect, DungeonMap, Battle, Reward, Rest, Shop, GameOver, Victory }
+public enum GameState { CharacterSelect, DungeonMap, Battle, Reward, Rest, Shop, Shrine, GameOver, Victory }
 
 public class DungeonManager : MonoBehaviour
 {
@@ -12,11 +12,12 @@ public class DungeonManager : MonoBehaviour
     public DungeonMap      CurrentMap    { get; private set; }
     public int             CurrentLayer  => currentLayer;
 
-    private int          currentLayer = 1;
-    private MapTile      currentBattleTile;
-    private BattleReward pendingReward;
-    private ShopSystem   shop = new ShopSystem();
-    private bool         shopCardRemovePurchased = false;
+    private int            currentLayer = 1;
+    private MapTile        currentBattleTile;
+    private BattleReward   pendingReward;
+    private ShopSystem     shop = new ShopSystem();
+    private bool           shopCardRemovePurchased = false;
+    private ShrineOption[] pendingShrineOptions;
 
     void Awake() => Instance = this;
 
@@ -70,6 +71,12 @@ public class DungeonManager : MonoBehaviour
             shopCardRemovePurchased = false;
             TransitionTo(GameState.Shop);
         }
+        else if (tile.type == TileType.Shrine && !tile.isCleared)
+        {
+            currentBattleTile = tile;
+            pendingShrineOptions = ShrineSystem.GenerateOptions(Player);
+            TransitionTo(GameState.Shrine);
+        }
     }
 
     // BattleManager에서 호출
@@ -89,14 +96,28 @@ public class DungeonManager : MonoBehaviour
             Debug.Log($"[DungeonManager] 식료품 획득: {FoodDatabase.Get(foodId)?.displayName}");
         }
 
-        bool isBoss = currentBattleTile?.type == TileType.Boss;
-        int  cardCount = isBoss ? 3 : (currentBattleTile?.type == TileType.EliteEnemy ? 2 : 1);
+        bool isBoss  = currentBattleTile?.type == TileType.Boss;
+        bool isElite = currentBattleTile?.type == TileType.EliteEnemy;
+        int  cardCount = isBoss ? 3 : (isElite ? 2 : 1);
+
+        string relicId = null;
+        if (isBoss || isElite)
+        {
+            relicId = LootTable.RollRelicDrop(isBoss, Player);
+            if (relicId != null)
+            {
+                Player.relics.Add(relicId);
+                RelicDatabase.ApplyPassiveEffects(relicId, Player);
+                Debug.Log($"[DungeonManager] 유물 획득: {RelicDatabase.Get(relicId)?.displayName}");
+            }
+        }
 
         pendingReward = new BattleReward
         {
             cardChoices = LootTable.RollCardRewards(currentLayer, cardCount),
             gold        = gold,
             foodId      = foodId,
+            relicId     = relicId,
         };
 
         if (isBoss && currentLayer >= 3)
@@ -180,6 +201,24 @@ public class DungeonManager : MonoBehaviour
     }
 
     public ShopSystem GetShop() => shop;
+
+    // 성소 3분기 중 카드 선택 - UI에서 호출 (index: 0=공격, 1=유틸, 2=방어)
+    public ShrineOption[] GetPendingShrineOptions() => pendingShrineOptions;
+
+    public bool ChooseShrineCard(int index)
+    {
+        if (pendingShrineOptions == null || index < 0 || index >= pendingShrineOptions.Length) return false;
+
+        Card card = pendingShrineOptions[index].card;
+        Player.deck.AddCard(card);
+        Debug.Log($"[DungeonManager] 성소에서 카드 제작: {card.cardName}");
+
+        if (currentBattleTile != null) currentBattleTile.isCleared = true;
+        pendingShrineOptions = null;
+        SaveSystem.Save(Player, currentLayer);
+        TransitionTo(GameState.DungeonMap);
+        return true;
+    }
 
     public void LeaveShop()
     {

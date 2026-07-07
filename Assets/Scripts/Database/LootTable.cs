@@ -68,7 +68,8 @@ public static class LootTable
         [3] = new[] { "dried_meat", "ration", "feast" },
     };
 
-    private const float FoodDropChance = 0.5f;
+    private const float FoodDropChance  = 0.5f;
+    private const float EliteRelicChance = 0.7f;
 
     public static List<string> RollCardRewards(int layer, int count)
     {
@@ -119,5 +120,18 @@ public static class LootTable
         int resolvedLayer = Mathf.Clamp(layer, 1, foodPool.Count);
         string[] pool = foodPool[resolvedLayer];
         return pool[Random.Range(0, pool.Length)];
+    }
+
+    // 유물은 일반 전투에서는 나오지 않고 엘리트/보스 전투와 상점에서만 나온다.
+    // 보스는 확정 드롭, 엘리트는 확률 드롭. 이미 보유한 유물은 다시 나오지 않는다.
+    public static string RollRelicDrop(bool isBoss, PlayerCharacter player)
+    {
+        if (!isBoss && Random.value > EliteRelicChance) return null;
+
+        List<RelicData> available = RelicDatabase.GetAll().FindAll(r =>
+            !player.relics.Has(r.id) && (isBoss || r.rarity != RelicRarity.Boss));
+        if (available.Count == 0) return null;
+
+        return available[Random.Range(0, available.Count)].id;
     }
 }

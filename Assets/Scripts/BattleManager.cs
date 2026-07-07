@@ -18,6 +18,9 @@ public class BattleManager : MonoBehaviour
     public BattleState CurrentState => state;
     public List<Enemy> GetEnemies() => enemies;
 
+    // 마나 코스트 매커닉은 일단 마법사 전용 — 다른 직업은 코스트 상관없이 카드 사용 가능
+    private bool UsesMana => player.characterClass == CharacterClass.Mage;
+
     void Awake() => Instance = this;
 
     // 집단 조우
@@ -86,13 +89,13 @@ public class BattleManager : MonoBehaviour
         if (handIndex < 0 || handIndex >= hand.Count) return false;
 
         Card card = hand[handIndex];
-        if (currentMana < card.manaCost)
+        if (UsesMana && currentMana < card.manaCost)
         {
             Debug.Log($"마나 부족! 필요:{card.manaCost} 현재:{currentMana}");
             return false;
         }
 
-        currentMana -= card.manaCost;
+        if (UsesMana) currentMana -= card.manaCost;
 
         List<Character> targets = BuildTargets(card, targetIndex);
         player.deck.PlayCard(handIndex, targets, player, player.GetFinalAttackBonus());

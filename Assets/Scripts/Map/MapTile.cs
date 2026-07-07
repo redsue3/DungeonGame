@@ -7,6 +7,7 @@ public enum TileType
     Boss,          // 보스
     Rest,          // 휴식
     Shop,          // 상점
+    Shrine,        // 성소 - 캐릭터 이벤트, 카드 제작
 }
 
 public class MapTile

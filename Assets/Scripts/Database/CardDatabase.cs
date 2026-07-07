@@ -52,6 +52,19 @@ public static class CardDatabase
         ["chaos_flame"]   = new Card("chaos_flame",   "혼돈 화염",    0, CardType.Attack,  dmg: 8, burn: 3, selfDmg: 4),
         ["thunder_storm"] = new Card("thunder_storm", "뇌우",         3, CardType.Attack,  dmg: 12, aoe: true),
         ["blessing"]      = new Card("blessing",      "축복",         1, CardType.Skill,   draw: 2, str: 1),
+
+        // 기본(일반) 카드 — 직업 무관, 전 계층 공통 등장, 코스트 없음 (2026-07-05 추가)
+        // 코스트 시스템은 일단 마법사 전용 매커닉이라 일반 카드는 전부 0코스트
+        ["quick_slash"]    = new Card("quick_slash",    "빠른 베기",     0, CardType.Attack,  dmg: 3),
+        ["solid_strike"]   = new Card("solid_strike",   "묵직한 일격",   0, CardType.Attack,  dmg: 11),
+        ["puncture"]       = new Card("puncture",       "관통",         0, CardType.Attack,  dmg: 6, poison: 1),
+        ["guard_up"]       = new Card("guard_up",       "수비 태세",     0, CardType.Defense, blk: 6),
+        ["steady_guard"]   = new Card("steady_guard",   "굳건한 수비",   0, CardType.Defense, blk: 11),
+        ["counter_stance"] = new Card("counter_stance", "반격 태세",     0, CardType.Defense, blk: 5, draw: 1),
+        ["focus"]          = new Card("focus",          "집중",         0, CardType.Skill,   draw: 2),
+        ["adrenaline"]     = new Card("adrenaline",     "아드레날린",    0, CardType.Skill,   str: 1, draw: 1),
+        ["second_wind"]    = new Card("second_wind",    "재정비",       0, CardType.Skill,   heal: 5),
+        ["toughen"]        = new Card("toughen",        "담금질",       0, CardType.Skill,   str: 2),
     };
 
     public static Card Create(string id)

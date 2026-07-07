@@ -13,6 +13,10 @@ public class PlayerCharacter : Character
     public int strengthStack;
     public int dexterityStack;
 
+    // 성소 유틸 카드의 '다음 카드 예약 보너스' - 해당 타입 카드를 실제로 낼 때 1회 소모됨
+    public int pendingAttackBonus;
+    public int pendingDefenseBonus;
+
     public int gold;
     public int currentFloor;
 
@@ -63,4 +67,18 @@ public class PlayerCharacter : Character
 
     public int GetFinalAttackBonus()  => attackBonus + strengthStack;
     public int GetFinalBlockBonus()   => dexterityStack;
+
+    public int ConsumePendingAttackBonus()
+    {
+        int value = pendingAttackBonus;
+        pendingAttackBonus = 0;
+        return value;
+    }
+
+    public int ConsumePendingDefenseBonus()
+    {
+        int value = pendingDefenseBonus;
+        pendingDefenseBonus = 0;
+        return value;
+    }
 }

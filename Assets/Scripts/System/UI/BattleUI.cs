@@ -97,7 +97,8 @@ public class BattleUI : MonoBehaviour
             if (btn != null)
             {
                 int currentMana = BattleManager.Instance?.CurrentMana ?? 0;
-                btn.interactable = card.manaCost <= currentMana;
+                bool usesMana = player.characterClass == CharacterClass.Mage;
+                btn.interactable = !usesMana || card.manaCost <= currentMana;
                 btn.onClick.AddListener(() =>
                 {
                     BattleManager.Instance?.UseCard(idx, selectedTargetIndex);

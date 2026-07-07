@@ -69,8 +69,15 @@ public static class MapGenerator
         // 상점 1개
         if (idx < positions.Count)
         {
-            var (x, y) = positions[idx];
+            var (x, y) = positions[idx++];
             map.SetTile(x, y, new MapTile { type = TileType.Shop });
+        }
+
+        // 성소 1개 - 캐릭터 이벤트, 카드 제작
+        if (idx < positions.Count)
+        {
+            var (x, y) = positions[idx];
+            map.SetTile(x, y, new MapTile { type = TileType.Shrine });
         }
 
         return map;

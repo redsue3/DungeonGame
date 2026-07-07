@@ -9,6 +9,7 @@ public class RewardUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI goldRewardText;
     [SerializeField] private TextMeshProUGUI titleText;
     [SerializeField] private TextMeshProUGUI foodRewardText;
+    [SerializeField] private TextMeshProUGUI relicRewardText;
 
     [Header("카드 선택")]
     [SerializeField] private Transform       cardChoiceParent;
@@ -42,6 +43,12 @@ public class RewardUI : MonoBehaviour
         {
             FoodData food = reward.foodId != null ? FoodDatabase.Get(reward.foodId) : null;
             foodRewardText.text = food != null ? $"식료품 획득: {food.displayName} (배고픔 +{food.hungerRestore})" : "";
+        }
+
+        if (relicRewardText != null)
+        {
+            RelicData relic = reward.relicId != null ? RelicDatabase.Get(reward.relicId) : null;
+            relicRewardText.text = relic != null ? $"유물 획득: {relic.displayName} — {relic.description}" : "";
         }
 
         foreach (var obj in choiceObjects) Destroy(obj);

@@ -72,10 +72,11 @@ public static class SceneSetup
         GameObject rewardPanel          = BuildRewardPanel(canvasGO.transform, cardPrefab);
         GameObject restPanel            = BuildRestPanel(canvasGO.transform);
         GameObject shopPanel            = BuildShopPanel(canvasGO.transform, shopItemPrefab, cardPrefab);
+        GameObject shrinePanel          = BuildShrinePanel(canvasGO.transform, cardPrefab);
         GameObject gameOverPanel        = BuildGameOverPanel(canvasGO.transform);
         GameObject victoryPanel         = BuildVictoryPanel(canvasGO.transform);
 
-        foreach (var p in new[] { characterSelectPanel, dungeonMapPanel, battlePanel, rewardPanel, restPanel, shopPanel, gameOverPanel, victoryPanel })
+        foreach (var p in new[] { characterSelectPanel, dungeonMapPanel, battlePanel, rewardPanel, restPanel, shopPanel, shrinePanel, gameOverPanel, victoryPanel })
             p.SetActive(false);
         characterSelectPanel.SetActive(true);
 
@@ -86,6 +87,7 @@ public static class SceneSetup
         Bind(uiManager, "rewardPanel", rewardPanel);
         Bind(uiManager, "restPanel", restPanel);
         Bind(uiManager, "shopPanel", shopPanel);
+        Bind(uiManager, "shrinePanel", shrinePanel);
         Bind(uiManager, "gameOverPanel", gameOverPanel);
         Bind(uiManager, "victoryPanel", victoryPanel);
 
@@ -507,8 +509,11 @@ public static class SceneSetup
         var foodRewardText = Text(panel.transform, "FoodReward", "", 20, TextAlignmentOptions.Center, new Color(0.7f, 0.9f, 0.5f));
         Anchor(foodRewardText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -176), new Vector2(0, -142));
 
+        var relicRewardText = Text(panel.transform, "RelicReward", "", 20, TextAlignmentOptions.Center, new Color(0.8f, 0.7f, 1f));
+        Anchor(relicRewardText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -212), new Vector2(0, -178));
+
         GameObject cardArea = NewGO("CardChoiceArea", panel.transform);
-        Anchor(cardArea.GetComponent<RectTransform>(), new Vector2(0.1f, 0.25f), new Vector2(0.9f, 0.78f), Vector2.zero, Vector2.zero);
+        Anchor(cardArea.GetComponent<RectTransform>(), new Vector2(0.1f, 0.25f), new Vector2(0.9f, 0.74f), Vector2.zero, Vector2.zero);
         var grid = cardArea.AddComponent<GridLayoutGroup>();
         grid.cellSize = new Vector2(200, 280);
         grid.spacing = new Vector2(20, 20);
@@ -521,6 +526,7 @@ public static class SceneSetup
         Bind(ui, "goldRewardText", goldRewardText);
         Bind(ui, "titleText", titleText);
         Bind(ui, "foodRewardText", foodRewardText);
+        Bind(ui, "relicRewardText", relicRewardText);
         Bind(ui, "cardChoiceParent", cardArea.transform);
         Bind(ui, "cardChoicePrefab", cardPrefab);
         Bind(ui, "skipBtn", skipBtn);
@@ -606,6 +612,45 @@ public static class SceneSetup
         Bind(ui, "leaveBtn", leaveBtn);
 
         return panel;
+    }
+
+    private static GameObject BuildShrinePanel(Transform canvas, GameObject cardPrefab)
+    {
+        GameObject panel = FullPanel("ShrinePanel", canvas, PanelBg);
+
+        var titleText = Text(panel.transform, "Title", "성소 접촉 — 카드 제작", 30, TextAlignmentOptions.Center, TextWhite);
+        Anchor(titleText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -110), new Vector2(0, -50));
+
+        Transform attackSlot  = BuildShrineBranchColumn(panel.transform, "AttackColumn",  "공격", new Vector2(0.04f, 0.15f), new Vector2(0.32f, 0.78f));
+        Transform utilitySlot = BuildShrineBranchColumn(panel.transform, "UtilityColumn", "유틸", new Vector2(0.36f, 0.15f), new Vector2(0.64f, 0.78f));
+        Transform defenseSlot = BuildShrineBranchColumn(panel.transform, "DefenseColumn", "방어", new Vector2(0.68f, 0.15f), new Vector2(0.96f, 0.78f));
+
+        var ui = panel.AddComponent<ShrineUI>();
+        Bind(ui, "titleText", titleText);
+        Bind(ui, "attackSlot", attackSlot);
+        Bind(ui, "utilitySlot", utilitySlot);
+        Bind(ui, "defenseSlot", defenseSlot);
+        Bind(ui, "cardChoicePrefab", cardPrefab);
+
+        return panel;
+    }
+
+    // 성소 패널의 분기 1개 열(라벨 + 카드 슬롯)을 만든다
+    private static Transform BuildShrineBranchColumn(Transform parent, string name, string label, Vector2 min, Vector2 max)
+    {
+        GameObject column = NewGO(name, parent);
+        Anchor(column.GetComponent<RectTransform>(), min, max, Vector2.zero, Vector2.zero);
+
+        var labelText = Text(column.transform, "Label", label, 26, TextAlignmentOptions.Center, new Color(0.85f, 0.8f, 1f));
+        Anchor(labelText.rectTransform, new Vector2(0, 0.88f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
+
+        GameObject slot = NewGO("Slot", column.transform);
+        Anchor(slot.GetComponent<RectTransform>(), new Vector2(0, 0), new Vector2(1, 0.86f), Vector2.zero, Vector2.zero);
+        var grid = slot.AddComponent<GridLayoutGroup>();
+        grid.cellSize        = new Vector2(200, 280);
+        grid.childAlignment  = TextAnchor.MiddleCenter;
+
+        return slot.transform;
     }
 
     private static GameObject BuildGameOverPanel(Transform canvas)

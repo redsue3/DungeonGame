@@ -69,6 +69,24 @@ public static class RelicDatabase
                 new RelicEffect { trigger = RelicTrigger.OnBattleStart, effectType = RelicEffectType.GainStrength,  value = 2 },
             }
         },
+        ["purifying_charm"] = new RelicData
+        {
+            id = "purifying_charm", displayName = "정화의 부적", rarity = RelicRarity.Uncommon,
+            description = "획득 시 덱에서 무작위 카드 1장 제거",
+            effects = new[] { new RelicEffect { trigger = RelicTrigger.Passive, effectType = RelicEffectType.RemoveRandomCard, value = 1 } }
+        },
+        ["hawk_eye"] = new RelicData
+        {
+            id = "hawk_eye", displayName = "매의 눈", rarity = RelicRarity.Uncommon,
+            description = "전투 시작 시 카드 2장 추가 드로우",
+            effects = new[] { new RelicEffect { trigger = RelicTrigger.OnBattleStart, effectType = RelicEffectType.DrawCard, value = 2 } }
+        },
+        ["chaos_prism"] = new RelicData
+        {
+            id = "chaos_prism", displayName = "혼돈의 프리즘", rarity = RelicRarity.Rare,
+            description = "획득 시 덱의 무작위 카드 1장을 다른 카드로 변환",
+            effects = new[] { new RelicEffect { trigger = RelicTrigger.Passive, effectType = RelicEffectType.TransformRandomCard, value = 1 } }
+        },
     };
 
     public static RelicData Get(string id)
@@ -103,6 +121,12 @@ public static class RelicDatabase
                 case RelicEffectType.BonusAttack:
                     player.attackBonus += eff.value;
                     break;
+                case RelicEffectType.RemoveRandomCard:
+                    RemoveRandomCardFromDeck(player);
+                    break;
+                case RelicEffectType.TransformRandomCard:
+                    TransformRandomCardInDeck(player);
+                    break;
                 // BonusGoldPct: 골드 계산 시 동적으로 적용 (여기선 처리 안 함)
             }
         }
@@ -123,5 +147,31 @@ public static class RelicDatabase
             }
         }
         return UnityEngine.Mathf.RoundToInt(baseGold * multiplier);
+    }
+
+    private static void RemoveRandomCardFromDeck(PlayerCharacter player)
+    {
+        List<Card> all = player.deck.GetAllCards();
+        if (all.Count == 0) return;
+        Card target = all[UnityEngine.Random.Range(0, all.Count)];
+        player.deck.RemoveCard(target.id);
+        Debug.Log($"[유물] 덱에서 제거: {target.cardName}");
+    }
+
+    private static void TransformRandomCardInDeck(PlayerCharacter player)
+    {
+        List<Card> all = player.deck.GetAllCards();
+        if (all.Count == 0) return;
+        Card target = all[UnityEngine.Random.Range(0, all.Count)];
+
+        int layer = DungeonManager.Instance != null ? DungeonManager.Instance.CurrentLayer : 1;
+        List<string> rolled = LootTable.RollCardRewards(layer, 1);
+        if (rolled.Count == 0) return;
+        Card replacement = CardDatabase.Create(rolled[0]);
+        if (replacement == null) return;
+
+        player.deck.RemoveCard(target.id);
+        player.deck.AddCard(replacement);
+        Debug.Log($"[유물] 카드 변환: {target.cardName} → {replacement.cardName}");
     }
 }

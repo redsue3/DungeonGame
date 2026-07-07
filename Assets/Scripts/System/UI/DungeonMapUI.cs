@@ -31,6 +31,7 @@ public class DungeonMapUI : MonoBehaviour
         [TileType.Boss]        = "👑",
         [TileType.Rest]        = "🔥",
         [TileType.Shop]        = "🛒",
+        [TileType.Shrine]      = "⛩",
         [TileType.Empty]       = "·",
     };
 
@@ -42,6 +43,7 @@ public class DungeonMapUI : MonoBehaviour
         [TileType.Boss]        = new Color(1f, 0.2f, 0.2f),
         [TileType.Rest]        = new Color(0.3f, 0.75f, 0.4f),
         [TileType.Shop]        = new Color(1f, 0.8f, 0.2f),
+        [TileType.Shrine]      = new Color(0.6f, 0.5f, 1f),
         [TileType.Empty]       = new Color(0.3f, 0.3f, 0.35f),
     };
 

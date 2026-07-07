@@ -16,10 +16,33 @@ public class SaveData
     public int   dexterityStack;
     public int   hunger;
     public int   maxHunger;
-    public string[] deckCardIds;
+    public CardSnapshot[] deckCards;
     public string[] relicIds;
     public string[] foodIds;
     public int[]    foodCounts;
+}
+
+// 카드 전체 스탯 스냅샷 - 성소에서 만들어진 카드처럼 CardDatabase에 없는(그때그때 생성된)
+// 카드도 세이브/로드 시 사라지지 않고 그대로 복원되도록 모든 필드를 담아 저장한다.
+[System.Serializable]
+public class CardSnapshot
+{
+    public string   id;
+    public string   cardName;
+    public int      manaCost;
+    public CardType cardType;
+    public bool     isAoe;
+    public int      damage;
+    public int      block;
+    public int      drawCount;
+    public int      healAmount;
+    public int      strengthGain;
+    public int      poisonApply;
+    public int      burnApply;
+    public int      selfDamage;
+    public int      growOnUse;
+    public int      buffNextAttack;
+    public int      buffNextDefense;
 }
 
 public static class SaveSystem
@@ -42,7 +65,7 @@ public static class SaveSystem
             dexterityStack = player.dexterityStack,
             hunger         = player.hunger,
             maxHunger      = player.maxHunger,
-            deckCardIds    = ExtractDeckIds(player.deck),
+            deckCards      = ExtractDeckSnapshots(player.deck),
             relicIds       = player.relics.GetAll().ToArray(),
             foodIds        = ExtractFoodIds(player.inventory),
             foodCounts     = ExtractFoodCounts(player.inventory),
@@ -83,12 +106,17 @@ public static class SaveSystem
         player.hunger        = data.maxHunger > 0 ? data.hunger    : HungerSystem.MaxHunger;
         player.maxHunger      = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
 
-        // 덱 복원
+        // 덱 복원 - CardDatabase에 등록된 카드는 최신 밸런스로, 성소 카드처럼
+        // 등록되지 않은 카드는 저장된 스냅샷 그대로 복원한다.
         player.deck = new Deck();
-        foreach (string cardId in data.deckCardIds)
+        if (data.deckCards != null)
         {
-            var card = CardDatabase.Create(cardId);
-            if (card != null) player.deck.AddCard(card);
+            foreach (CardSnapshot snap in data.deckCards)
+            {
+                if (snap == null) continue;
+                Card card = CardDatabase.Exists(snap.id) ? CardDatabase.Create(snap.id) : CardFromSnapshot(snap);
+                if (card != null) player.deck.AddCard(card);
+            }
         }
 
         // 유물 복원
@@ -109,14 +137,29 @@ public static class SaveSystem
         return player;
     }
 
-    private static string[] ExtractDeckIds(Deck deck)
+    private static CardSnapshot[] ExtractDeckSnapshots(Deck deck)
     {
         var cards = deck.GetAllCards();
-        var ids   = new string[cards.Count];
+        var snaps = new CardSnapshot[cards.Count];
         for (int i = 0; i < cards.Count; i++)
-            ids[i] = cards[i].id;
-        return ids;
+        {
+            Card c = cards[i];
+            snaps[i] = new CardSnapshot
+            {
+                id = c.id, cardName = c.cardName, manaCost = c.manaCost, cardType = c.cardType, isAoe = c.isAoe,
+                damage = c.damage, block = c.block, drawCount = c.drawCount, healAmount = c.healAmount,
+                strengthGain = c.strengthGain, poisonApply = c.poisonApply, burnApply = c.burnApply, selfDamage = c.selfDamage,
+                growOnUse = c.growOnUse, buffNextAttack = c.buffNextAttack, buffNextDefense = c.buffNextDefense,
+            };
+        }
+        return snaps;
     }
+
+    private static Card CardFromSnapshot(CardSnapshot s) => new Card(
+        s.id, s.cardName, s.manaCost, s.cardType,
+        dmg: s.damage, blk: s.block, draw: s.drawCount, heal: s.healAmount,
+        str: s.strengthGain, poison: s.poisonApply, burn: s.burnApply, selfDmg: s.selfDamage, aoe: s.isAoe,
+        growOnUse: s.growOnUse, buffNextAttack: s.buffNextAttack, buffNextDefense: s.buffNextDefense);
 
     private static string[] ExtractFoodIds(Inventory inventory)
     {

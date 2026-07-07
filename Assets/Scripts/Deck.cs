@@ -54,10 +54,19 @@ public class Deck
     private void ApplyCardEffect(Card card, List<Character> targets, Character caster, int attackBonus)
     {
         // 타겟별 효과 (데미지/독/화상)
+        if (card.damage > 0)
+        {
+            int finalAttackBonus = attackBonus;
+            if (caster is PlayerCharacter attacker)
+                finalAttackBonus += attacker.ConsumePendingAttackBonus();
+
+            foreach (Character target in targets)
+                target.TakeDamage(DamageCalculator.Calculate(card.damage, finalAttackBonus));
+
+            if (card.growOnUse > 0) card.damage += card.growOnUse; // 성소의 성장형 카드 - 사용할수록 영구 강화
+        }
         foreach (Character target in targets)
         {
-            if (card.damage > 0)
-                target.TakeDamage(DamageCalculator.Calculate(card.damage, attackBonus));
             if (card.poisonApply > 0)
                 target.poisonStack += card.poisonApply;
             if (card.burnApply > 0)
@@ -68,6 +77,7 @@ public class Deck
         if (card.block > 0)
         {
             int bonus = (caster is PlayerCharacter pc) ? pc.GetFinalBlockBonus() : 0;
+            if (caster is PlayerCharacter defender) bonus += defender.ConsumePendingDefenseBonus();
             caster.AddBlock(card.block + bonus);
         }
         if (card.drawCount > 0)    DrawCards(card.drawCount);
@@ -75,6 +85,13 @@ public class Deck
         if (card.strengthGain > 0 && caster is PlayerCharacter pcs)
             pcs.strengthStack += card.strengthGain;
         if (card.selfDamage > 0)   caster.TakeDamage(card.selfDamage);
+
+        // 성소 유틸 카드 - 다음 공격/방어 카드에 적용될 보너스 예약
+        if (caster is PlayerCharacter buffer)
+        {
+            if (card.buffNextAttack > 0)  buffer.pendingAttackBonus  += card.buffNextAttack;
+            if (card.buffNextDefense > 0) buffer.pendingDefenseBonus += card.buffNextDefense;
+        }
     }
 
     public void DiscardHand()
