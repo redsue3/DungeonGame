@@ -22,6 +22,9 @@ public class CharacterSelectUI : MonoBehaviour
     [SerializeField] private Button confirmBtn;
     [SerializeField] private TextMeshProUGUI confirmBtnText;
 
+    [Header("이어하기 버튼")]
+    [SerializeField] private Button continueBtn;
+
     private CharacterClass selectedClass = CharacterClass.Warrior;
 
     void OnEnable()
@@ -31,6 +34,12 @@ public class CharacterSelectUI : MonoBehaviour
         mageBtn.onClick.AddListener(()    => SelectClass(CharacterClass.Mage));
         paladinBtn.onClick.AddListener(() => SelectClass(CharacterClass.Paladin));
         confirmBtn.onClick.AddListener(OnConfirm);
+
+        if (continueBtn != null)
+        {
+            continueBtn.onClick.AddListener(OnContinue);
+            continueBtn.gameObject.SetActive(SaveSystem.HasSave());
+        }
 
         SelectClass(CharacterClass.Warrior);
     }
@@ -42,6 +51,7 @@ public class CharacterSelectUI : MonoBehaviour
         mageBtn.onClick.RemoveAllListeners();
         paladinBtn.onClick.RemoveAllListeners();
         confirmBtn.onClick.RemoveAllListeners();
+        continueBtn?.onClick.RemoveAllListeners();
     }
 
     private void SelectClass(CharacterClass cls)
@@ -75,6 +85,8 @@ public class CharacterSelectUI : MonoBehaviour
     }
 
     private void OnConfirm() => DungeonManager.Instance.StartRun(selectedClass);
+
+    private void OnContinue() => DungeonManager.Instance.LoadRun();
 
     private void SetButtonHighlight(Button btn, bool selected)
     {

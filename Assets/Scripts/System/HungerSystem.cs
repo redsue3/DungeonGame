@@ -4,7 +4,7 @@ using UnityEngine;
 public static class HungerSystem
 {
     public const int MaxHunger          = 100;
-    public const int TilesPerHungerTick = 3;   // 이 칸수만큼 이동할 때마다 배고픔 소모
+    public const int TilesPerHungerTick = 60;  // 이 칸수만큼 이동할 때마다 배고픔 소모 (그리드 이동은 한 칸이 예전 노드 이동보다 훨씬 잘게 쪼개져서 20배로 늘림)
     public const int HungerLossPerTick  = 6;
     public const int BattleHungerCost   = 10;  // 전투 진입 시 소모
     public const int StarvationDamage   = 5;   // 배고픔 0 상태에서 이동 시 HP 피해

@@ -18,7 +18,7 @@ public class EnemyPanelUI : MonoBehaviour
         nameText.text    = enemy.characterName + (enemy.isBoss ? "  [보스]" : enemy.isElite ? "  [엘리트]" : "");
         hpSlider.value   = (float)enemy.currentHp / enemy.maxHp;
         hpText.text      = $"{enemy.currentHp} / {enemy.maxHp}";
-        blockText.text   = enemy.block > 0 ? $"🛡 {enemy.block}" : "";
+        blockText.text   = enemy.block > 0 ? $"방어 {enemy.block}" : "";
 
         EnemyAction next = enemy.PeekNextAction();
         intentText.text  = next != null ? $"→ {IntentIcon(next.intent)} {next.description}" : "";
@@ -34,11 +34,11 @@ public class EnemyPanelUI : MonoBehaviour
 
     private string IntentIcon(EnemyIntent intent) => intent switch
     {
-        EnemyIntent.Attack => "⚔",
-        EnemyIntent.Defend => "🛡",
-        EnemyIntent.Buff   => "↑",
-        EnemyIntent.Poison => "☠",
-        EnemyIntent.Burn   => "🔥",
-        _                  => "?"
+        EnemyIntent.Attack => "[공격]",
+        EnemyIntent.Defend => "[방어]",
+        EnemyIntent.Buff   => "[버프]",
+        EnemyIntent.Poison => "[독]",
+        EnemyIntent.Burn   => "[화상]",
+        _                  => "[?]"
     };
 }

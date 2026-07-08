@@ -59,7 +59,7 @@ public class BattleUI : MonoBehaviour
         playerNameText.text  = player.characterName;
         playerHpSlider.value = (float)player.currentHp / player.maxHp;
         playerHpText.text    = $"{player.currentHp} / {player.maxHp}";
-        playerBlockText.text = player.block > 0 ? $"🛡 {player.block}" : "";
+        playerBlockText.text = player.block > 0 ? $"방어 {player.block}" : "";
 
         int currentMana = BattleManager.Instance != null
             ? BattleManager.Instance.CurrentMana : player.maxMana;

@@ -1,14 +1,16 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+// 픽셀던전 스타일 그리드 던전 렌더러. 예전 노드그래프(층/x 자유배치 + 연결선) 방식을 대체한다.
+// 바닥 타일만 실체 오브젝트로 만들고(벽은 그냥 빈 공간), 플레이어를 항상 화면 중앙에 두고
+// 나머지 타일/적 마커를 플레이어 기준 상대 좌표로 배치해서 카메라 추종 효과를 낸다.
 public class DungeonMapUI : MonoBehaviour
 {
     [Header("맵 그리드")]
     [SerializeField] private GameObject tilePrefab;   // Button + Image + Text 구성
-    [SerializeField] private Transform  gridParent;   // 자유 배치 컨테이너 (레이아웃 그룹 없음)
+    [SerializeField] private Transform  gridParent;   // 중앙 기준 자유 배치 컨테이너
     [SerializeField] private TextMeshProUGUI layerText;
 
     [Header("플레이어 상태 (상단)")]
@@ -21,26 +23,26 @@ public class DungeonMapUI : MonoBehaviour
     [SerializeField] private InventoryUI inventoryUI;
     [SerializeField] private Button      inventoryBtn;
 
-    private const float NodeSize = 64f;
-    private const float MarginX  = 70f;
-    private const float MarginY  = 70f;
+    private const float MinTileSize = 14f;
+    private const float MaxTileSize = 48f;
+    private const float DefaultTileSize = 26f;
+    private const string TileSizePrefKey = "DungeonMap.TileSize";
 
-    private readonly List<GameObject> tileObjects = new List<GameObject>();
-    private readonly List<GameObject> lineObjects = new List<GameObject>();
+    private float TileSize;
 
-    // 타일 타입별 아이콘 문자 (폰트 아이콘 없이 텍스트로 표현)
-    private static readonly Dictionary<TileType, string> tileIcon = new Dictionary<TileType, string>
+    // 타일 타입별 아이콘/색 (방 중심 칸에만 표시)
+    private static readonly Dictionary<TileType, string> roomIcon = new Dictionary<TileType, string>
     {
-        [TileType.NormalEnemy] = "⚔",
-        [TileType.GroupEnemy]  = "⚔⚔",
-        [TileType.EliteEnemy]  = "☠",
-        [TileType.Boss]        = "👑",
-        [TileType.Rest]        = "🔥",
-        [TileType.Shop]        = "🛒",
-        [TileType.Shrine]      = "⛩",
+        [TileType.NormalEnemy] = "적",
+        [TileType.GroupEnemy]  = "적×2",
+        [TileType.EliteEnemy]  = "정예",
+        [TileType.Boss]        = "보스",
+        [TileType.Rest]        = "휴식",
+        [TileType.Shop]        = "상점",
+        [TileType.Shrine]      = "성소",
     };
 
-    private static readonly Dictionary<TileType, Color> tileColor = new Dictionary<TileType, Color>
+    private static readonly Dictionary<TileType, Color> roomColor = new Dictionary<TileType, Color>
     {
         [TileType.NormalEnemy] = new Color(0.9f, 0.4f, 0.4f),
         [TileType.GroupEnemy]  = new Color(0.85f, 0.3f, 0.3f),
@@ -51,8 +53,20 @@ public class DungeonMapUI : MonoBehaviour
         [TileType.Shrine]      = new Color(0.6f, 0.5f, 1f),
     };
 
+    private static readonly Color FloorVisibleColor = new Color(0.32f, 0.32f, 0.38f);
+    private static readonly Color FloorDimColor      = new Color(0.16f, 0.16f, 0.2f);
+    private static readonly Color PlayerColor        = new Color(0.2f, 0.6f, 1f);
+    private static readonly Color EnemyIdleColor     = new Color(0.6f, 0.55f, 0.2f);
+    private static readonly Color EnemyChaseColor    = new Color(1f, 0.25f, 0.2f);
+
+    private DungeonFloor lastFloor;
+    private readonly Dictionary<(int, int), GameObject> floorTileObjects = new Dictionary<(int, int), GameObject>();
+    private GameObject playerMarker;
+    private readonly Dictionary<int, GameObject> enemyMarkers = new Dictionary<int, GameObject>();
+
     void OnEnable()
     {
+        TileSize = PlayerPrefs.GetFloat(TileSizePrefKey, DefaultTileSize);
         inventoryBtn?.onClick.AddListener(() => inventoryUI?.Open());
         Refresh();
     }
@@ -62,14 +76,49 @@ public class DungeonMapUI : MonoBehaviour
         inventoryBtn?.onClick.RemoveAllListeners();
     }
 
+    void Update()
+    {
+        if (DungeonManager.Instance == null || DungeonManager.Instance.CurrentState != GameState.DungeonMap) return;
+
+        if (Input.GetKeyDown(KeyCode.UpArrow)    || Input.GetKeyDown(KeyCode.W)) Move(0, 1);
+        else if (Input.GetKeyDown(KeyCode.DownArrow)  || Input.GetKeyDown(KeyCode.S)) Move(0, -1);
+        else if (Input.GetKeyDown(KeyCode.LeftArrow)  || Input.GetKeyDown(KeyCode.A)) Move(-1, 0);
+        else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) Move(1, 0);
+
+        float scroll = Input.mouseScrollDelta.y;
+        if (scroll != 0f) Zoom(scroll);
+    }
+
+    // 마우스 휠로 타일 크기 조절 (기억해뒀다가 다음에 켤 때도 유지)
+    private void Zoom(float delta)
+    {
+        TileSize = Mathf.Clamp(TileSize + delta * 3f, MinTileSize, MaxTileSize);
+        PlayerPrefs.SetFloat(TileSizePrefKey, TileSize);
+
+        DungeonFloor floor = DungeonManager.Instance?.CurrentFloor;
+        if (floor != null) RepaintGrid(floor);
+    }
+
+    private void Move(int dx, int dy)
+    {
+        if (DungeonManager.Instance.TryMove(dx, dy)) Refresh();
+    }
+
     public void Refresh()
     {
-        DungeonMap map = DungeonManager.Instance?.CurrentMap;
-        if (map == null) return;
+        DungeonFloor floor = DungeonManager.Instance?.CurrentFloor;
+        if (floor == null) return;
 
-        layerText.text      = $"{map.Layer}계층";
+        layerText.text = $"{floor.Layer}계층";
         UpdatePlayerStatus();
-        RebuildMap(map);
+
+        if (floor != lastFloor)
+        {
+            RebuildGridObjects(floor);
+            lastFloor = floor;
+        }
+
+        RepaintGrid(floor);
     }
 
     private void UpdatePlayerStatus()
@@ -80,7 +129,7 @@ public class DungeonMapUI : MonoBehaviour
         playerHpText.text    = $"HP  {p.currentHp} / {p.maxHp}";
         playerGoldText.text  = $"골드  {p.gold}";
         if (playerHungerText != null)
-            playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " ⚠" : "");
+            playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " (위험!)" : "");
 
         var relicNames = new System.Text.StringBuilder();
         foreach (string id in p.relics.GetAll())
@@ -91,116 +140,121 @@ public class DungeonMapUI : MonoBehaviour
         playerRelicsText.text = relicNames.Length > 0 ? relicNames.ToString().TrimEnd() : "유물 없음";
     }
 
-    // 층(floor)/가로위치(x)로 배치된 분기형 맵을 그린다.
-    // 예전 9x7 그리드와 달리 실제로 존재하는 노드와, 그 노드끼리를 잇는 선만 그린다 -
-    // 화면에 보이는 방은 전부 진짜 갈 수 있는 곳이고, 그중 지금 위치에서 갈 수 있는 곳만
-    // 밝게 표시되고 클릭이 된다.
-    private void RebuildMap(DungeonMap map)
+    // 바닥 타일 오브젝트를 새 층 크기에 맞게 새로 만든다 (층이 바뀔 때만 호출 - 매 이동마다 다시 만들지 않음).
+    private void RebuildGridObjects(DungeonFloor floor)
     {
-        foreach (var obj in lineObjects) Destroy(obj);
-        lineObjects.Clear();
-        foreach (var obj in tileObjects) Destroy(obj);
-        tileObjects.Clear();
+        foreach (var obj in floorTileObjects.Values) Destroy(obj);
+        floorTileObjects.Clear();
+        foreach (var obj in enemyMarkers.Values) Destroy(obj);
+        enemyMarkers.Clear();
+        if (playerMarker != null) Destroy(playerMarker);
 
-        var rt = (RectTransform)gridParent;
-        float w = rt.rect.width;
-        float h = rt.rect.height;
-        float usableW = Mathf.Max(1f, w - MarginX * 2f);
-        float usableH = Mathf.Max(1f, h - MarginY * 2f);
-
-        Vector2 PosOf(MapNode n) => new Vector2(
-            MarginX + n.x * usableW - w / 2f,
-            MarginY + (float)n.floor / (map.FloorCount - 1) * usableH - h / 2f);
-
-        var reachableIds = new HashSet<int>(map.ReachableNodes().Select(n => n.id));
-
-        // 연결선을 버튼보다 먼저 그려서 항상 아래에 깔리게 함
-        foreach (var node in map.Nodes)
+        for (int x = 0; x < floor.Width; x++)
         {
-            Vector2 from = PosOf(node);
-            bool outgoingFromCurrent = node.id == map.CurrentNodeId;
-            foreach (int nextId in node.next)
+            for (int y = 0; y < floor.Height; y++)
             {
-                MapNode target = map.GetNode(nextId);
-                lineObjects.Add(CreateLine(from, PosOf(target), outgoingFromCurrent));
+                if (floor.Tiles[x, y] != TileKind.Floor) continue;
+
+                GameObject obj = Instantiate(tilePrefab, gridParent);
+                var rt = (RectTransform)obj.transform;
+                rt.sizeDelta = new Vector2(TileSize, TileSize);
+                floorTileObjects[(x, y)] = obj;
             }
         }
 
-        // 아직 입장 전이면 화면 아래에 가상의 "시작" 지점과, 0층으로 가는 선을 보여준다
-        if (map.CurrentNodeId < 0)
+        playerMarker = Instantiate(tilePrefab, gridParent);
+        var prt = (RectTransform)playerMarker.transform;
+        prt.sizeDelta = new Vector2(TileSize, TileSize);
+        playerMarker.GetComponent<Button>().interactable = false;
+        playerMarker.GetComponent<Image>().color = PlayerColor;
+        playerMarker.GetComponentInChildren<TextMeshProUGUI>().text = "★";
+    }
+
+    // 플레이어를 중심(0,0)에 고정하고 나머지는 상대 좌표로 그린다 (카메라 추종 효과).
+    private void RepaintGrid(DungeonFloor floor)
+    {
+        int px = floor.PlayerX, py = floor.PlayerY;
+        var playerRt = (RectTransform)playerMarker.transform;
+        playerRt.anchoredPosition = Vector2.zero;
+        playerRt.sizeDelta = new Vector2(TileSize, TileSize);
+
+        foreach (var kv in floorTileObjects)
         {
-            Vector2 startPos = new Vector2(0f, -h / 2f - MarginY * 0.6f);
-            foreach (var node in map.NodesOnFloor(0))
-                lineObjects.Add(CreateLine(startPos, PosOf(node), true));
+            int x = kv.Key.Item1, y = kv.Key.Item2;
+            GameObject obj = kv.Value;
 
-            GameObject startMarker = Instantiate(tilePrefab, gridParent);
-            tileObjects.Add(startMarker);
-            var srt = (RectTransform)startMarker.transform;
-            srt.anchoredPosition = startPos;
-            srt.sizeDelta = new Vector2(NodeSize * 0.8f, NodeSize * 0.8f);
-            startMarker.GetComponent<Image>().color = new Color(0.4f, 0.8f, 1f);
-            startMarker.GetComponentInChildren<TextMeshProUGUI>().text = "시작";
-            startMarker.GetComponent<Button>().interactable = false;
-        }
+            if (!floor.Visited[x, y]) { obj.SetActive(false); continue; }
+            obj.SetActive(true);
 
-        foreach (var node in map.Nodes)
-        {
-            GameObject obj = Instantiate(tilePrefab, gridParent);
-            tileObjects.Add(obj);
+            var rt  = (RectTransform)obj.transform;
+            rt.sizeDelta = new Vector2(TileSize, TileSize);
+            rt.anchoredPosition = new Vector2((x - px) * TileSize, (y - py) * TileSize);
 
-            var nodeRt = (RectTransform)obj.transform;
-            nodeRt.anchoredPosition = PosOf(node);
-            nodeRt.sizeDelta = new Vector2(NodeSize, NodeSize);
-
+            bool visible = floor.Visible[x, y];
             var img = obj.GetComponent<Image>();
             var lbl = obj.GetComponentInChildren<TextMeshProUGUI>();
             var btn = obj.GetComponent<Button>();
 
-            bool isCurrent   = node.id == map.CurrentNodeId;
-            bool isReachable = reachableIds.Contains(node.id);
+            RoomInfo room = floor.RoomAt(x, y);
+            bool showRoomIcon = room != null && !room.isCleared && room.CenterX == x && room.CenterY == y
+                                 && roomIcon.TryGetValue(room.roomType, out string icon);
 
-            if (isCurrent)
+            if (showRoomIcon)
             {
-                img.color = new Color(0.2f, 0.6f, 1f);
-                lbl.text  = "★";
-            }
-            else if (node.isCleared)
-            {
-                img.color = new Color(0.2f, 0.2f, 0.25f);
-                lbl.text  = "✓";
+                img.color = visible ? roomColor[room.roomType] : roomColor[room.roomType] * new Color(0.5f, 0.5f, 0.5f, 1f);
+                lbl.text  = roomIcon[room.roomType];
             }
             else
             {
-                Color baseColor = tileColor.TryGetValue(node.type, out Color c) ? c : Color.gray;
-                img.color = isReachable ? baseColor : baseColor * new Color(0.45f, 0.45f, 0.45f, 0.6f);
-                lbl.text  = tileIcon.TryGetValue(node.type, out string icon) ? icon : "?";
+                img.color = visible ? FloorVisibleColor : FloorDimColor;
+                lbl.text  = "";
             }
 
-            btn.interactable = isReachable && !isCurrent;
+            bool isAdjacent = System.Math.Abs(x - px) + System.Math.Abs(y - py) == 1 ||
+                               (System.Math.Abs(x - px) == 1 && System.Math.Abs(y - py) == 1);
+            btn.interactable = visible && isAdjacent;
+            btn.onClick.RemoveAllListeners();
             if (btn.interactable)
             {
-                int nodeId = node.id;
-                btn.onClick.AddListener(() => DungeonManager.Instance.MoveToNode(nodeId));
+                int ddx = x - px, ddy = y - py;
+                btn.onClick.AddListener(() => Move(ddx, ddy));
             }
         }
+
+        RepaintEnemies(floor, px, py);
     }
 
-    private GameObject CreateLine(Vector2 from, Vector2 to, bool active)
+    private void RepaintEnemies(DungeonFloor floor, int px, int py)
     {
-        GameObject line = new GameObject("Line", typeof(RectTransform));
-        line.transform.SetParent(gridParent, false);
+        var seen = new HashSet<int>();
 
-        var img = line.AddComponent<Image>();
-        img.color = active ? new Color(1f, 0.85f, 0.3f, 0.8f) : new Color(1f, 1f, 1f, 0.15f);
-        img.raycastTarget = false;
+        foreach (EnemySpawn e in floor.Enemies)
+        {
+            if (e.isDead) continue;
+            if (!floor.Visible[e.x, e.y]) continue;
+            seen.Add(e.id);
 
-        Vector2 dir = to - from;
-        float length = dir.magnitude;
+            if (!enemyMarkers.TryGetValue(e.id, out GameObject obj))
+            {
+                obj = Instantiate(tilePrefab, gridParent);
+                obj.GetComponent<Button>().interactable = false;
+                enemyMarkers[e.id] = obj;
+            }
 
-        var rt = (RectTransform)line.transform;
-        rt.sizeDelta        = new Vector2(length, active ? 5f : 3f);
-        rt.anchoredPosition  = (from + to) / 2f;
-        rt.localRotation     = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
-        return line;
+            var ert = (RectTransform)obj.transform;
+            ert.sizeDelta = new Vector2(TileSize * 0.8f, TileSize * 0.8f);
+            ert.anchoredPosition = new Vector2((e.x - px) * TileSize, (e.y - py) * TileSize);
+            obj.GetComponent<Image>().color = e.state == EnemyAiState.Chasing ? EnemyChaseColor : EnemyIdleColor;
+            obj.GetComponentInChildren<TextMeshProUGUI>().text = e.state == EnemyAiState.Chasing ? "!" : "?";
+        }
+
+        var toRemove = new List<int>();
+        foreach (var kv in enemyMarkers)
+        {
+            if (seen.Contains(kv.Key)) continue;
+            Destroy(kv.Value);
+            toRemove.Add(kv.Key);
+        }
+        foreach (int id in toRemove) enemyMarkers.Remove(id);
     }
 }

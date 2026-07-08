@@ -40,7 +40,6 @@ public static class SceneSetup
         GameObject managers = new GameObject("Managers");
         managers.AddComponent<DungeonManager>();
         managers.AddComponent<BattleManager>();
-        managers.AddComponent<LayerManager>();
 
         // ── Canvas ──
         GameObject canvasGO = new GameObject("Canvas");
@@ -126,7 +125,11 @@ public static class SceneSetup
         var le = go.AddComponent<LayoutElement>();
         le.preferredWidth = 70; le.preferredHeight = 70;
 
-        Text(go.transform, "Label", "?", 26, TextAlignmentOptions.Center, Color.white);
+        var label = Text(go.transform, "Label", "?", 26, TextAlignmentOptions.Center, Color.white);
+        label.enableAutoSizing = true;
+        label.fontSizeMin = 6;
+        label.fontSizeMax = 26;
+        label.margin = new Vector4(2, 2, 2, 2);
 
         return SaveTemplateAsPrefab(go, $"{PrefabDir}/MapTile.prefab");
     }
@@ -281,6 +284,9 @@ public static class SceneSetup
         var title = Text(panel.transform, "Title", "직업을 선택하세요", 40, TextAlignmentOptions.Center, TextWhite);
         Anchor(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -140), new Vector2(0, -60));
 
+        var continueBtn = Btn(panel.transform, "ContinueBtn", "이어하기", BtnBlue, out _);
+        Anchor(continueBtn.GetComponent<RectTransform>(), new Vector2(0.78f, 0.92f), new Vector2(0.98f, 0.98f), Vector2.zero, Vector2.zero);
+
         GameObject btnRow = NewGO("ClassButtons", panel.transform);
         Anchor(btnRow.GetComponent<RectTransform>(), new Vector2(0.15f, 0.74f), new Vector2(0.85f, 0.86f), Vector2.zero, Vector2.zero);
         var hlg = btnRow.AddComponent<HorizontalLayoutGroup>();
@@ -324,6 +330,7 @@ public static class SceneSetup
         Bind(ui, "starterCardsText", starterCardsText);
         Bind(ui, "confirmBtn", confirmBtn);
         Bind(ui, "confirmBtnText", confirmBtnText);
+        Bind(ui, "continueBtn", continueBtn);
 
         return panel;
     }

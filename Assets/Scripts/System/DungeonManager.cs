@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public enum GameState { CharacterSelect, DungeonMap, Battle, Reward, Rest, Shop, Shrine, GameOver, Victory }
@@ -9,14 +10,15 @@ public class DungeonManager : MonoBehaviour
 
     public GameState       CurrentState  { get; private set; }
     public PlayerCharacter Player        { get; private set; }
-    public DungeonMap      CurrentMap    { get; private set; }
+    public DungeonFloor    CurrentFloor  { get; private set; }
     public int             CurrentLayer  => currentLayer;
 
     private int            currentLayer = 1;
-    private MapNode        currentBattleNode;
+    private RoomInfo       currentRoom;   // 지금 상호작용 중인 방 (전투/휴식/상점/성소 공용)
     private BattleReward   pendingReward;
     private ShopSystem     shop = new ShopSystem();
     private bool           shopCardRemovePurchased = false;
+    private bool           shopPurchasedThisVisit  = false;
     private ShrineOption[] pendingShrineOptions;
 
     void Awake() => Instance = this;
@@ -25,65 +27,150 @@ public class DungeonManager : MonoBehaviour
     {
         Player       = PlayerFactory.Create(cls);
         currentLayer = 1;
-        CurrentMap   = MapGenerator.Generate(currentLayer);
+        CurrentFloor = FloorGenerator.Generate(currentLayer);
         Debug.Log($"[DungeonManager] 런 시작: {Player.characterName}  계층:{currentLayer}");
         TransitionTo(GameState.DungeonMap);
     }
 
-    // 플레이어 이동 - 맵 UI에서 호출 (nodeId: 지금 위치에서 이어진 노드만 가능)
-    public void MoveToNode(int nodeId)
+    // 세이브 파일에서 이어하기 - CharacterSelectUI의 이어하기 버튼에서 호출
+    // 맵 자체는 저장되지 않으므로(계층 번호만 저장) 해당 계층 던전을 새로 생성해서 입장 전 상태로 되돌린다.
+    public bool LoadRun()
     {
-        if (CurrentState != GameState.DungeonMap) return;
+        SaveData data = SaveSystem.Load();
+        if (data == null) return false;
 
-        MapNode node = CurrentMap.TryMoveTo(nodeId);
-        if (node == null) return;
+        Player       = SaveSystem.RestorePlayer(data);
+        currentLayer = data.currentLayer;
+        CurrentFloor = FloorGenerator.Generate(currentLayer);
+        Debug.Log($"[DungeonManager] 이어하기: {Player.characterName}  계층:{currentLayer}");
+        TransitionTo(GameState.DungeonMap);
+        return true;
+    }
+
+    // 플레이어 한 칸 이동 - 맵 UI에서 호출. 벽이면 무시, 바닥이면 이동 후 적 AI 한 스텝 + 조우 판정.
+    public bool TryMove(int dx, int dy)
+    {
+        if (CurrentState != GameState.DungeonMap) return false;
+
+        int nx = CurrentFloor.PlayerX + dx;
+        int ny = CurrentFloor.PlayerY + dy;
+        if (!CurrentFloor.IsWalkable(nx, ny)) return false;
+
+        CurrentFloor.PlayerX = nx;
+        CurrentFloor.PlayerY = ny;
+        CurrentFloor.RevealAround(nx, ny, FloorGenerator.VisionRadius);
 
         HungerSystem.OnPlayerMove(Player);
         if (!Player.IsAlive)
         {
             TransitionTo(GameState.GameOver);
-            return;
+            return true;
         }
 
-        if (node.HasEnemy)
-        {
-            currentBattleNode = node;
+        if (TryEngageEnemyAt(nx, ny)) return true;
 
-            var enemyList = new List<Enemy>();
-            foreach (string id in node.enemyIds)
+        StepEnemies();
+        if (TryEngageEnemyAt(CurrentFloor.PlayerX, CurrentFloor.PlayerY)) return true;
+
+        RoomInfo room = CurrentFloor.RoomAt(nx, ny);
+        if (room != null && !room.isCleared)
+        {
+            if (room.roomType == TileType.Rest)
             {
-                Enemy e = EnemyFactory.Create(id);
-                if (e != null) enemyList.Add(e);
+                currentRoom = room;
+                TransitionTo(GameState.Rest);
+                return true;
             }
+            if (room.roomType == TileType.Shop)
+            {
+                currentRoom = room;
+                shop.Generate(currentLayer, Player);
+                shopCardRemovePurchased = false;
+                shopPurchasedThisVisit  = false;
+                TransitionTo(GameState.Shop);
+                return true;
+            }
+            if (room.roomType == TileType.Shrine)
+            {
+                currentRoom = room;
+                pendingShrineOptions = ShrineSystem.GenerateOptions(Player);
+                TransitionTo(GameState.Shrine);
+                return true;
+            }
+        }
 
-            BattleManager.Instance.StartBattle(Player, enemyList);
-            TransitionTo(GameState.Battle);
-        }
-        else if (node.type == TileType.Rest && !node.isCleared)
+        return true;
+    }
+
+    private bool TryEngageEnemyAt(int x, int y)
+    {
+        EnemySpawn spawn = CurrentFloor.EnemyAt(x, y);
+        if (spawn == null) return false;
+
+        currentRoom = CurrentFloor.Rooms.FirstOrDefault(r => r.id == spawn.roomId);
+
+        var enemyList = new List<Enemy>();
+        foreach (EnemySpawn s in CurrentFloor.AliveEnemiesInRoom(spawn.roomId))
         {
-            currentBattleNode = node;
-            TransitionTo(GameState.Rest);
+            Enemy e = EnemyFactory.Create(s.enemyTemplateId);
+            if (e != null) enemyList.Add(e);
         }
-        else if (node.type == TileType.Shop && !node.isCleared)
+
+        BattleManager.Instance.StartBattle(Player, enemyList);
+        TransitionTo(GameState.Battle);
+        return true;
+    }
+
+    // 감지 반경 안에 들어온 적을 Chasing으로 전환하고, Chasing 상태인 적을 플레이어 쪽으로 한 칸씩 옮긴다.
+    private void StepEnemies()
+    {
+        foreach (EnemySpawn e in CurrentFloor.Enemies)
         {
-            currentBattleNode = node;
-            shop.Generate(currentLayer, Player);
-            shopCardRemovePurchased = false;
-            TransitionTo(GameState.Shop);
+            if (e.isDead) continue;
+
+            int dist2 = (e.x - CurrentFloor.PlayerX) * (e.x - CurrentFloor.PlayerX) +
+                        (e.y - CurrentFloor.PlayerY) * (e.y - CurrentFloor.PlayerY);
+            if (e.state == EnemyAiState.Idle && dist2 <= FloorGenerator.EnemyDetectRadius * FloorGenerator.EnemyDetectRadius)
+                e.state = EnemyAiState.Chasing;
+
+            if (e.state != EnemyAiState.Chasing) continue;
+
+            StepTowardPlayer(e);
         }
-        else if (node.type == TileType.Shrine && !node.isCleared)
-        {
-            currentBattleNode = node;
-            pendingShrineOptions = ShrineSystem.GenerateOptions(Player);
-            TransitionTo(GameState.Shrine);
-        }
+    }
+
+    private void StepTowardPlayer(EnemySpawn e)
+    {
+        int dx = System.Math.Sign(CurrentFloor.PlayerX - e.x);
+        int dy = System.Math.Sign(CurrentFloor.PlayerY - e.y);
+
+        if (TryStepEnemy(e, dx, dy)) return;
+        if (dx != 0 && TryStepEnemy(e, dx, 0)) return;
+        if (dy != 0 && TryStepEnemy(e, 0, dy)) return;
+    }
+
+    private bool TryStepEnemy(EnemySpawn e, int dx, int dy)
+    {
+        if (dx == 0 && dy == 0) return false;
+        int nx = e.x + dx, ny = e.y + dy;
+        if (!CurrentFloor.IsWalkable(nx, ny)) return false;
+        if (CurrentFloor.EnemyAt(nx, ny) != null) return false;
+        if (nx == CurrentFloor.PlayerX && ny == CurrentFloor.PlayerY) return false; // 실제 이동 대신 TryEngage에서 처리
+
+        e.x = nx;
+        e.y = ny;
+        return true;
     }
 
     // BattleManager에서 호출
     public void OnBattleWon()
     {
-        if (currentBattleNode != null)
-            currentBattleNode.isCleared = true;
+        if (currentRoom != null)
+        {
+            currentRoom.isCleared = true;
+            foreach (EnemySpawn s in CurrentFloor.AliveEnemiesInRoom(currentRoom.id))
+                s.isDead = true;
+        }
 
         int gold = RelicDatabase.ApplyGoldBonus(LootTable.RollGold(currentLayer), Player);
         Player.gold += gold;
@@ -96,8 +183,8 @@ public class DungeonManager : MonoBehaviour
             Debug.Log($"[DungeonManager] 식료품 획득: {FoodDatabase.Get(foodId)?.displayName}");
         }
 
-        bool isBoss  = currentBattleNode?.type == TileType.Boss;
-        bool isElite = currentBattleNode?.type == TileType.EliteEnemy;
+        bool isBoss  = currentRoom?.roomType == TileType.Boss;
+        bool isElite = currentRoom?.roomType == TileType.EliteEnemy;
         int  cardCount = isBoss ? 3 : (isElite ? 2 : 1);
 
         string relicId = null;
@@ -129,7 +216,7 @@ public class DungeonManager : MonoBehaviour
         if (isBoss)
         {
             currentLayer++;
-            CurrentMap = MapGenerator.Generate(currentLayer);
+            CurrentFloor = FloorGenerator.Generate(currentLayer);
         }
 
         TransitionTo(GameState.Reward);
@@ -161,8 +248,14 @@ public class DungeonManager : MonoBehaviour
     {
         int heal = Mathf.RoundToInt(Player.maxHp * 0.3f);
         Player.Heal(heal);
-        if (currentBattleNode != null) currentBattleNode.isCleared = true;
+        if (currentRoom != null) currentRoom.isCleared = true;
         SaveSystem.Save(Player, currentLayer);
+        TransitionTo(GameState.DungeonMap);
+    }
+
+    // 휴식하지 않고 그냥 지나치기 - 모닥불을 소모하지 않으므로 나중에 다시 방문 가능
+    public void LeaveRestSite()
+    {
         TransitionTo(GameState.DungeonMap);
     }
 
@@ -174,6 +267,7 @@ public class DungeonManager : MonoBehaviour
         {
             ShopItem item = shop.Items[index];
             if (item.type == ShopItemType.RemoveCard) shopCardRemovePurchased = true;
+            shopPurchasedThisVisit = true;
         }
         return success;
     }
@@ -213,16 +307,17 @@ public class DungeonManager : MonoBehaviour
         Player.deck.AddCard(card);
         Debug.Log($"[DungeonManager] 성소에서 카드 제작: {card.cardName}");
 
-        if (currentBattleNode != null) currentBattleNode.isCleared = true;
+        if (currentRoom != null) currentRoom.isCleared = true;
         pendingShrineOptions = null;
         SaveSystem.Save(Player, currentLayer);
         TransitionTo(GameState.DungeonMap);
         return true;
     }
 
+    // 아무것도 안 사고 나가면 상점을 소모하지 않는다 (나중에 다시 들러서 살 수 있음)
     public void LeaveShop()
     {
-        if (currentBattleNode != null) currentBattleNode.isCleared = true;
+        if (currentRoom != null && shopPurchasedThisVisit) currentRoom.isCleared = true;
         SaveSystem.Save(Player, currentLayer);
         TransitionTo(GameState.DungeonMap);
     }

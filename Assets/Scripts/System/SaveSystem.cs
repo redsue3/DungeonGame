@@ -75,10 +75,6 @@ public static class SaveSystem
         Debug.Log($"[SaveSystem] 저장 완료");
     }
 
-    // LayerManager 기반 흐름에서 호출할 때 쓰는 오버로드
-    public static void Save(PlayerCharacter player, LayerManager layer)
-        => Save(player, layer.currentLayer, layer.currentStage);
-
     public static SaveData Load()
     {
         if (!HasSave()) return null;

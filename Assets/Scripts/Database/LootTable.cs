@@ -15,6 +15,22 @@ public class RewardEntry
 
 public static class LootTable
 {
+    // 기본(공용) 카드 10종 - 전 계층 공통으로 등장, 직업 전용/희귀 카드보다 약해서 가중치를 낮게 줌
+    // (2026-07-05에 CardDatabase엔 추가됐지만 드롭 풀엔 연결 안 돼 있던 것 - 2026-07-08 연결)
+    private static readonly List<RewardEntry> basicCardPool = new List<RewardEntry>
+    {
+        new RewardEntry { type = RewardType.Card, id = "quick_slash",    weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "solid_strike",   weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "puncture",       weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "guard_up",       weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "steady_guard",   weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "counter_stance", weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "focus",          weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "adrenaline",     weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "second_wind",    weight = 4 },
+        new RewardEntry { type = RewardType.Card, id = "toughen",        weight = 4 },
+    };
+
     private static readonly Dictionary<int, List<RewardEntry>> cardPool =
         new Dictionary<int, List<RewardEntry>>
     {
@@ -70,6 +86,12 @@ public static class LootTable
 
     private const float FoodDropChance  = 0.5f;
     private const float EliteRelicChance = 0.7f;
+
+    static LootTable()
+    {
+        foreach (var pool in cardPool.Values)
+            pool.AddRange(basicCardPool);
+    }
 
     public static List<string> RollCardRewards(int layer, int count)
     {

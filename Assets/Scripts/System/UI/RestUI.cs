@@ -43,5 +43,5 @@ public class RestUI : MonoBehaviour
     }
 
     private void OnRest()  => DungeonManager.Instance.UseRestSite();
-    private void OnLeave() => DungeonManager.Instance.LeaveShop();   // 그냥 지나치기
+    private void OnLeave() => DungeonManager.Instance.LeaveRestSite();   // 그냥 지나치기 - 모닥불 유지
 }
