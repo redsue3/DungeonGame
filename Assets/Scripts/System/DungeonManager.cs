@@ -72,8 +72,9 @@ public class DungeonManager : MonoBehaviour
         StepEnemies();
         if (TryEngageEnemyAt(CurrentFloor.PlayerX, CurrentFloor.PlayerY)) return true;
 
+        // 휴식/상점/성소는 아이콘이 표시되는 방 중심 타일에 직접 접촉했을 때만 발동 (방 전체 범위 아님)
         RoomInfo room = CurrentFloor.RoomAt(nx, ny);
-        if (room != null && !room.isCleared)
+        if (room != null && !room.isCleared && nx == room.CenterX && ny == room.CenterY)
         {
             if (room.roomType == TileType.Rest)
             {

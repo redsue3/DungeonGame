@@ -63,7 +63,7 @@ public class CharacterSelectUI : MonoBehaviour
 
         classNameText.text    = data.displayName;
         hpText.text           = $"HP  {data.maxHp}";
-        manaText.text         = $"마나  {data.maxMana}";
+        manaText.text         = $"코스트  {data.maxMana}";
         handSizeText.text     = $"시작 패  {data.startHandSize}장";
         attackBonusText.text  = $"공격 보너스  +{data.baseAttackBonus}";
         confirmBtnText.text   = $"{data.displayName} 선택";

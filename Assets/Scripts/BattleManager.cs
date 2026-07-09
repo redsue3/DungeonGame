@@ -11,15 +11,15 @@ public class BattleManager : MonoBehaviour
     private PlayerCharacter  player;
     private List<Enemy>      enemies = new List<Enemy>();
     private int              currentMana;
+    private int              manaRefillPenalty; // 코스트 소진으로 턴이 자동 종료됐을 때, 다음 턴 리필량에서 깎이는 "리필 틈" 페널티
     private BattleState      state;
     private HashSet<string>  usedOnceRelics = new HashSet<string>();
+
+    private const int ManaDrainPenalty = 1;
 
     public int         CurrentMana  => currentMana;
     public BattleState CurrentState => state;
     public List<Enemy> GetEnemies() => enemies;
-
-    // 마나 코스트 매커닉은 일단 마법사 전용 — 다른 직업은 코스트 상관없이 카드 사용 가능
-    private bool UsesMana => player.characterClass == CharacterClass.Mage;
 
     void Awake() => Instance = this;
 
@@ -29,6 +29,7 @@ public class BattleManager : MonoBehaviour
         player  = playerCharacter;
         enemies = new List<Enemy>(enemyList);
         usedOnceRelics.Clear();
+        manaRefillPenalty = 0;
         player.deck.ResetForBattle();
         HungerSystem.OnBattleStart(player);
         ApplyRelicTrigger(RelicTrigger.OnBattleStart);
@@ -61,7 +62,12 @@ public class BattleManager : MonoBehaviour
     {
         playerTurnEnded = false;
         player.OnTurnStart();
-        currentMana = player.maxMana;
+
+        int penalty = manaRefillPenalty;
+        manaRefillPenalty = 0;
+        currentMana = Mathf.Max(0, player.maxMana - penalty);
+        if (penalty > 0) Debug.Log($"[BattleManager] 리필 틈 페널티 적용 — 이번 턴 코스트 -{penalty}");
+
         player.deck.DrawCards(player.startHandSize);
         ApplyRelicTrigger(RelicTrigger.OnTurnStart);
 
@@ -70,7 +76,7 @@ public class BattleManager : MonoBehaviour
             EnemyAction next = e.PeekNextAction();
             Debug.Log($"[{e.characterName} 의도] {next.description}  (HP:{e.currentHp}/{e.maxHp})");
         }
-        Debug.Log($"=== 플레이어 턴 | 마나:{currentMana}/{player.maxMana} | HP:{player.currentHp}/{player.maxHp} ===");
+        Debug.Log($"=== 플레이어 턴 | 코스트:{currentMana}/{player.maxMana} | HP:{player.currentHp}/{player.maxHp} ===");
         LogHand();
         NotifyUI();
 
@@ -89,18 +95,18 @@ public class BattleManager : MonoBehaviour
         if (handIndex < 0 || handIndex >= hand.Count) return false;
 
         Card card = hand[handIndex];
-        if (UsesMana && currentMana < card.manaCost)
+        if (currentMana < card.manaCost)
         {
-            Debug.Log($"마나 부족! 필요:{card.manaCost} 현재:{currentMana}");
+            Debug.Log($"코스트 부족! 필요:{card.manaCost} 현재:{currentMana}");
             return false;
         }
 
-        if (UsesMana) currentMana -= card.manaCost;
+        currentMana -= card.manaCost;
 
         List<Character> targets = BuildTargets(card, targetIndex);
         player.deck.PlayCard(handIndex, targets, player, player.GetFinalAttackBonus());
 
-        Debug.Log($"[{card.cardName}] 사용 | 남은 마나:{currentMana}");
+        Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{currentMana}");
 
         // 처치 판정 → OnKill 유물 발동
         for (int i = 0; i < enemies.Count; i++)
@@ -115,6 +121,15 @@ public class BattleManager : MonoBehaviour
         }
 
         if (enemies.TrueForAll(e => !e.IsAlive)) state = BattleState.Win;
+
+        // 코스트를 완전히 소진하면 턴이 자동으로 끝나고, 다음 턴 리필에 "틈"(페널티)이 생긴다
+        if (state == BattleState.PlayerTurn && currentMana <= 0)
+        {
+            manaRefillPenalty = ManaDrainPenalty;
+            Debug.Log("[BattleManager] 코스트 소진 — 턴 자동 종료 (다음 턴 리필 -1)");
+            EndPlayerTurn();
+        }
+
         NotifyUI();
         return true;
     }
@@ -190,7 +205,7 @@ public class BattleManager : MonoBehaviour
     {
         var hand = player.deck.GetHand();
         for (int i = 0; i < hand.Count; i++)
-            Debug.Log($"  [{i}] {hand[i].cardName} (마나:{hand[i].manaCost}) - {hand[i].description}");
+            Debug.Log($"  [{i}] {hand[i].cardName} (코스트:{hand[i].manaCost}) - {hand[i].description}");
     }
 
     private void ApplyRelicTrigger(RelicTrigger trigger)

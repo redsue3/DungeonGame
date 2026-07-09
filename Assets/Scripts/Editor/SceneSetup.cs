@@ -308,7 +308,7 @@ public static class SceneSetup
 
         var classNameText    = TextLine(infoBox.transform, "ClassName", "전사", 28, TextWhite, 44);
         var hpText            = TextLine(infoBox.transform, "HpText", "HP 80", 20, TextWhite, 32);
-        var manaText           = TextLine(infoBox.transform, "ManaText", "마나 3", 20, TextWhite, 32);
+        var manaText           = TextLine(infoBox.transform, "ManaText", "코스트 3", 20, TextWhite, 32);
         var handSizeText       = TextLine(infoBox.transform, "HandSizeText", "시작 패 5장", 20, TextWhite, 32);
         var attackBonusText    = TextLine(infoBox.transform, "AttackBonusText", "공격 보너스 +2", 20, TextWhite, 32);
         var starterCardsText   = TextLine(infoBox.transform, "StarterCardsText", "스타터 덱: ...", 16, TextDim, 60);
@@ -446,7 +446,7 @@ public static class SceneSetup
         StretchFull(playerHpText.rectTransform);
 
         var playerBlockText  = TextLine(top.transform, "BlockText", "", 18, new Color(0.5f, 0.75f, 1f), 32, 90);
-        var playerManaText   = TextLine(top.transform, "ManaText", "마나 ◆◆◆", 18, new Color(0.6f, 0.8f, 1f), 32, 200);
+        var playerManaText   = TextLine(top.transform, "ManaText", "코스트 ◆◆◆", 18, new Color(0.6f, 0.8f, 1f), 32, 200);
         var playerStatusText = TextLine(top.transform, "StatusText", "", 16, new Color(0.6f, 0.9f, 0.6f), 32, 240);
         var turnText          = TextLine(top.transform, "TurnText", "당신의 턴", 20, new Color(1f, 0.85f, 0.3f), 32, 150);
 

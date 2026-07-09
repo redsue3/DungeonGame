@@ -31,7 +31,7 @@ public static class FloorGenerator
         boss.roomType  = TileType.Boss;
         start.roomType = TileType.Empty;
 
-        AssignRoomTypes(floor.Rooms, start, boss);
+        AssignRoomTypes(floor.Rooms, start, boss, layer);
         SpawnEnemies(floor, layer);
 
         floor.PlayerX = start.CenterX;
@@ -162,19 +162,20 @@ public static class FloorGenerator
         rooms.Where(r => r != start).OrderByDescending(r => ManhattanDist(r, start)).First();
 
     // ─────────────────────────────────────────
-    // 방 타입 배정 - 예전 MapGenerator와 동일한 비율 풀 재사용
+    // 방 타입 배정 - 성소는 게임 전체(런)에 1개만 나오도록 1층에서만 배정, 모닥불(Rest)은 층당 1개로 축소.
+    // 풀 크기(9~10)가 남은 방 개수(11)보다 적어서 남는 방은 아래 foreach의 fallback으로 NormalEnemy가 됨.
     // ─────────────────────────────────────────
-    private static void AssignRoomTypes(List<RoomInfo> rooms, RoomInfo start, RoomInfo boss)
+    private static void AssignRoomTypes(List<RoomInfo> rooms, RoomInfo start, RoomInfo boss, int layer)
     {
         var pool = new List<TileType>
         {
             TileType.NormalEnemy, TileType.NormalEnemy, TileType.NormalEnemy, TileType.NormalEnemy,
             TileType.GroupEnemy, TileType.GroupEnemy,
             TileType.EliteEnemy,
-            TileType.Rest, TileType.Rest,
+            TileType.Rest,
             TileType.Shop,
-            TileType.Shrine,
         };
+        if (layer == 1) pool.Add(TileType.Shrine);
         Shuffle(pool);
 
         var remaining = rooms.Where(r => r != start && r != boss).ToList();

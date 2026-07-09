@@ -97,8 +97,7 @@ public class BattleUI : MonoBehaviour
             if (btn != null)
             {
                 int currentMana = BattleManager.Instance?.CurrentMana ?? 0;
-                bool usesMana = player.characterClass == CharacterClass.Mage;
-                btn.interactable = !usesMana || card.manaCost <= currentMana;
+                btn.interactable = card.manaCost <= currentMana;
                 btn.onClick.AddListener(() =>
                 {
                     BattleManager.Instance?.UseCard(idx, selectedTargetIndex);
@@ -148,7 +147,7 @@ public class BattleUI : MonoBehaviour
 
     private string BuildManaPips(int current, int max)
     {
-        var sb = new System.Text.StringBuilder("마나 ");
+        var sb = new System.Text.StringBuilder("코스트 ");
         for (int i = 0; i < max; i++)
             sb.Append(i < current ? "◆" : "◇");
         return sb.ToString();
