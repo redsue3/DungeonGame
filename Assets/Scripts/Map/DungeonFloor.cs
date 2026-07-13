@@ -66,7 +66,25 @@ public class DungeonFloor
 
     public IEnumerable<EnemySpawn> AliveEnemiesInRoom(int roomId) => Enemies.Where(e => !e.isDead && e.roomId == roomId);
 
-    // 플레이어 주변 반경을 시야로 밝히고 방문 처리 (원형 근사, 실제 시야선 계산은 안 함 - 이 규모에선 과함).
+    // Bresenham 직선으로 (x1,y1)→(x2,y2) 사이에 벽이 없으면 true.
+    public bool HasLineOfSight(int x1, int y1, int x2, int y2)
+    {
+        int dx = System.Math.Abs(x2 - x1), dy = System.Math.Abs(y2 - y1);
+        int sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
+        int err = dx - dy;
+        int x = x1, y = y1;
+
+        while (true)
+        {
+            if (x == x2 && y == y2) return true;
+            if (!InBounds(x, y) || (!(x == x1 && y == y1) && Tiles[x, y] == TileKind.Wall)) return false;
+            int e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 <  dx) { err += dx; y += sy; }
+        }
+    }
+
+    // 실제 시야선(Bresenham)으로 벽 뒤는 가리는 시야 공개.
     public void RevealAround(int cx, int cy, int radius)
     {
         for (int x = 0; x < Width; x++)
@@ -81,6 +99,7 @@ public class DungeonFloor
                 if (dx * dx + dy * dy > r2) continue;
                 int x = cx + dx, y = cy + dy;
                 if (!InBounds(x, y)) continue;
+                if (!HasLineOfSight(cx, cy, x, y)) continue;
                 Visible[x, y] = true;
                 Visited[x, y] = true;
             }

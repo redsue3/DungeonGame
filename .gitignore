@@ -26,3 +26,7 @@ ExportedObj/
 crashlytics-build.properties
 Assets/AssetStoreTools*
 build_log.txt
+
+# Unity 6 editor-integration artifacts
+.vscode/
+*.slnx

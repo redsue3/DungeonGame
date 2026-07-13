@@ -69,8 +69,13 @@ public class DungeonManager : MonoBehaviour
 
         if (TryEngageEnemyAt(nx, ny)) return true;
 
-        StepEnemies();
-        if (TryEngageEnemyAt(CurrentFloor.PlayerX, CurrentFloor.PlayerY)) return true;
+        // 적 AI 스텝 - 쫓아오던 적이 플레이어에게 닿으면 그 적이 전투를 건다
+        EnemySpawn attacker = StepEnemies();
+        if (attacker != null)
+        {
+            Engage(attacker);
+            return true;
+        }
 
         // 휴식/상점/성소는 아이콘이 표시되는 방 중심 타일에 직접 접촉했을 때만 발동 (방 전체 범위 아님)
         RoomInfo room = CurrentFloor.RoomAt(nx, ny);
@@ -107,7 +112,13 @@ public class DungeonManager : MonoBehaviour
     {
         EnemySpawn spawn = CurrentFloor.EnemyAt(x, y);
         if (spawn == null) return false;
+        Engage(spawn);
+        return true;
+    }
 
+    // spawn이 속한 방의 살아있는 적 전원과 전투 시작 (집단 조우)
+    private void Engage(EnemySpawn spawn)
+    {
         currentRoom = CurrentFloor.Rooms.FirstOrDefault(r => r.id == spawn.roomId);
 
         var enemyList = new List<Enemy>();
@@ -119,35 +130,81 @@ public class DungeonManager : MonoBehaviour
 
         BattleManager.Instance.StartBattle(Player, enemyList);
         TransitionTo(GameState.Battle);
-        return true;
     }
 
-    // 감지 반경 안에 들어온 적을 Chasing으로 전환하고, Chasing 상태인 적을 플레이어 쪽으로 한 칸씩 옮긴다.
-    private void StepEnemies()
+    // 시야선(LOS) 확인 후 감지 → BFS로 최단 경로 추적. 플레이어에게 닿은 적(전투 개시자)이 있으면 반환.
+    private EnemySpawn StepEnemies()
     {
         foreach (EnemySpawn e in CurrentFloor.Enemies)
         {
             if (e.isDead) continue;
 
-            int dist2 = (e.x - CurrentFloor.PlayerX) * (e.x - CurrentFloor.PlayerX) +
-                        (e.y - CurrentFloor.PlayerY) * (e.y - CurrentFloor.PlayerY);
-            if (e.state == EnemyAiState.Idle && dist2 <= FloorGenerator.EnemyDetectRadius * FloorGenerator.EnemyDetectRadius)
-                e.state = EnemyAiState.Chasing;
+            // 시야선이 뚫려 있으면 Chasing으로 전환
+            if (e.state == EnemyAiState.Idle &&
+                CurrentFloor.HasLineOfSight(e.x, e.y, CurrentFloor.PlayerX, CurrentFloor.PlayerY))
+            {
+                int dist2 = (e.x - CurrentFloor.PlayerX) * (e.x - CurrentFloor.PlayerX) +
+                            (e.y - CurrentFloor.PlayerY) * (e.y - CurrentFloor.PlayerY);
+                if (dist2 <= FloorGenerator.EnemyDetectRadius * FloorGenerator.EnemyDetectRadius)
+                    e.state = EnemyAiState.Chasing;
+            }
 
             if (e.state != EnemyAiState.Chasing) continue;
-
-            StepTowardPlayer(e);
+            if (StepTowardPlayer(e)) return e;
         }
+        return null;
     }
 
-    private void StepTowardPlayer(EnemySpawn e)
+    // BFS 최단 경로로 한 칸 이동. 다음 칸이 플레이어 타일이면 이동 대신 접촉(전투 개시) 신호를 반환.
+    private bool StepTowardPlayer(EnemySpawn e)
     {
-        int dx = System.Math.Sign(CurrentFloor.PlayerX - e.x);
-        int dy = System.Math.Sign(CurrentFloor.PlayerY - e.y);
+        var path = BfsPath(e.x, e.y, CurrentFloor.PlayerX, CurrentFloor.PlayerY);
+        if (path == null || path.Count < 2) return false;
 
-        if (TryStepEnemy(e, dx, dy)) return;
-        if (dx != 0 && TryStepEnemy(e, dx, 0)) return;
-        if (dy != 0 && TryStepEnemy(e, 0, dy)) return;
+        var next = path[1];
+        if (next.x == CurrentFloor.PlayerX && next.y == CurrentFloor.PlayerY) return true;
+
+        TryStepEnemy(e, next.x - e.x, next.y - e.y);
+        return false;
+    }
+
+    private List<(int x, int y)> BfsPath(int sx, int sy, int tx, int ty)
+    {
+        var start = (x: sx, y: sy);
+        var goal  = (x: tx, y: ty);
+
+        var queue  = new Queue<(int x, int y)>();
+        var parent = new Dictionary<(int x, int y), (int x, int y)>();
+        queue.Enqueue(start);
+        parent[start] = start;
+
+        int[] ddx = { 0, 0, 1, -1 };
+        int[] ddy = { 1, -1, 0, 0 };
+
+        while (queue.Count > 0)
+        {
+            var cur = queue.Dequeue();
+            if (cur == goal) break;
+
+            for (int i = 0; i < 4; i++)
+            {
+                var next = (x: cur.x + ddx[i], y: cur.y + ddy[i]);
+                if (!CurrentFloor.IsWalkable(next.x, next.y)) continue;
+                if (parent.ContainsKey(next)) continue;
+                // 플레이어 칸 자체는 목표로 허용, 다른 적이 막고 있으면 우회
+                if (next != goal && CurrentFloor.EnemyAt(next.x, next.y) != null) continue;
+                parent[next] = cur;
+                queue.Enqueue(next);
+            }
+        }
+
+        if (!parent.ContainsKey(goal)) return null;
+
+        var path = new List<(int x, int y)>();
+        for (var node = goal; node != start; node = parent[node]) path.Add(node);
+        path.Add(start);
+        path.Reverse();
+        return path;
     }
 
     private bool TryStepEnemy(EnemySpawn e, int dx, int dy)
@@ -156,7 +213,7 @@ public class DungeonManager : MonoBehaviour
         int nx = e.x + dx, ny = e.y + dy;
         if (!CurrentFloor.IsWalkable(nx, ny)) return false;
         if (CurrentFloor.EnemyAt(nx, ny) != null) return false;
-        if (nx == CurrentFloor.PlayerX && ny == CurrentFloor.PlayerY) return false; // 실제 이동 대신 TryEngage에서 처리
+        if (nx == CurrentFloor.PlayerX && ny == CurrentFloor.PlayerY) return false; // 접촉 전투는 StepTowardPlayer가 처리
 
         e.x = nx;
         e.y = ny;
