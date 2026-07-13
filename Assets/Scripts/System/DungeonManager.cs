@@ -61,6 +61,7 @@ public class DungeonManager : MonoBehaviour
         CurrentFloor.RevealAround(nx, ny, FloorGenerator.VisionRadius);
 
         HungerSystem.OnPlayerMove(Player);
+        MapCardSystem.OnPlayerMove(Player);
         if (!Player.IsAlive)
         {
             TransitionTo(GameState.GameOver);
@@ -349,6 +350,16 @@ public class DungeonManager : MonoBehaviour
         Player.ChangeHunger(food.hungerRestore);
         Debug.Log($"[DungeonManager] {food.displayName} 섭취 → 배고픔 +{food.hungerRestore} (현재 {Player.hunger}/{Player.maxHunger})");
         SaveSystem.Save(Player, currentLayer);
+        return true;
+    }
+
+    // 맵 탐색 중 비공격 카드 사용 - MapCardUI에서 호출. 덱은 소모하지 않고 코스트만 지불한다.
+    public bool UseMapCard(Card card)
+    {
+        if (CurrentState != GameState.DungeonMap) return false;
+        if (!MapCardSystem.UseCard(Player, card)) return false;
+
+        if (!Player.IsAlive) TransitionTo(GameState.GameOver); // 자해 효과가 있는 카드 대비
         return true;
     }
 

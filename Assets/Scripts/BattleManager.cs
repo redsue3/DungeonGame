@@ -10,14 +10,14 @@ public class BattleManager : MonoBehaviour
 
     private PlayerCharacter  player;
     private List<Enemy>      enemies = new List<Enemy>();
-    private int              currentMana;
+    private bool             firstPlayerTurn;   // 전투 첫 턴은 맵에서 들고 온 코스트/방어막을 그대로 쓴다 (리필/블록 초기화 없음)
     private int              manaRefillPenalty; // 코스트 소진으로 턴이 자동 종료됐을 때, 다음 턴 리필량에서 깎이는 "리필 틈" 페널티
     private BattleState      state;
     private HashSet<string>  usedOnceRelics = new HashSet<string>();
 
     private const int ManaDrainPenalty = 1;
 
-    public int         CurrentMana  => currentMana;
+    public int         CurrentMana  => player != null ? player.currentMana : 0;
     public BattleState CurrentState => state;
     public List<Enemy> GetEnemies() => enemies;
 
@@ -30,6 +30,7 @@ public class BattleManager : MonoBehaviour
         enemies = new List<Enemy>(enemyList);
         usedOnceRelics.Clear();
         manaRefillPenalty = 0;
+        firstPlayerTurn   = true;
         player.deck.ResetForBattle();
         HungerSystem.OnBattleStart(player);
         ApplyRelicTrigger(RelicTrigger.OnBattleStart);
@@ -61,12 +62,21 @@ public class BattleManager : MonoBehaviour
     private IEnumerator PlayerTurn()
     {
         playerTurnEnded = false;
-        player.OnTurnStart();
 
-        int penalty = manaRefillPenalty;
-        manaRefillPenalty = 0;
-        currentMana = Mathf.Max(0, player.maxMana - penalty);
-        if (penalty > 0) Debug.Log($"[BattleManager] 리필 틈 페널티 적용 — 이번 턴 코스트 -{penalty}");
+        if (firstPlayerTurn)
+        {
+            // 첫 턴: 맵에서 들고 온 코스트/방어막으로 그대로 시작 (풀 리필은 2턴부터 - 맵 카드 사용의 대가)
+            firstPlayerTurn = false;
+            player.OnTurnStart(resetBlock: false);
+        }
+        else
+        {
+            player.OnTurnStart();
+            int penalty = manaRefillPenalty;
+            manaRefillPenalty = 0;
+            player.currentMana = Mathf.Max(0, player.maxMana - penalty);
+            if (penalty > 0) Debug.Log($"[BattleManager] 리필 틈 페널티 적용 — 이번 턴 코스트 -{penalty}");
+        }
 
         player.deck.DrawCards(player.startHandSize);
         ApplyRelicTrigger(RelicTrigger.OnTurnStart);
@@ -76,7 +86,7 @@ public class BattleManager : MonoBehaviour
             EnemyAction next = e.PeekNextAction();
             Debug.Log($"[{e.characterName} 의도] {next.description}  (HP:{e.currentHp}/{e.maxHp})");
         }
-        Debug.Log($"=== 플레이어 턴 | 코스트:{currentMana}/{player.maxMana} | HP:{player.currentHp}/{player.maxHp} ===");
+        Debug.Log($"=== 플레이어 턴 | 코스트:{player.currentMana}/{player.maxMana} | HP:{player.currentHp}/{player.maxHp} ===");
         LogHand();
         NotifyUI();
 
@@ -95,18 +105,18 @@ public class BattleManager : MonoBehaviour
         if (handIndex < 0 || handIndex >= hand.Count) return false;
 
         Card card = hand[handIndex];
-        if (currentMana < card.manaCost)
+        if (player.currentMana < card.manaCost)
         {
-            Debug.Log($"코스트 부족! 필요:{card.manaCost} 현재:{currentMana}");
+            Debug.Log($"코스트 부족! 필요:{card.manaCost} 현재:{player.currentMana}");
             return false;
         }
 
-        currentMana -= card.manaCost;
+        player.currentMana -= card.manaCost;
 
         List<Character> targets = BuildTargets(card, targetIndex);
         player.deck.PlayCard(handIndex, targets, player, player.GetFinalAttackBonus());
 
-        Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{currentMana}");
+        Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{player.currentMana}");
 
         // 처치 판정 → OnKill 유물 발동
         for (int i = 0; i < enemies.Count; i++)
@@ -123,7 +133,7 @@ public class BattleManager : MonoBehaviour
         if (enemies.TrueForAll(e => !e.IsAlive)) state = BattleState.Win;
 
         // 코스트를 완전히 소진하면 턴이 자동으로 끝나고, 다음 턴 리필에 "틈"(페널티)이 생긴다
-        if (state == BattleState.PlayerTurn && currentMana <= 0)
+        if (state == BattleState.PlayerTurn && player.currentMana <= 0)
         {
             manaRefillPenalty = ManaDrainPenalty;
             Debug.Log("[BattleManager] 코스트 소진 — 턴 자동 종료 (다음 턴 리필 -1)");
@@ -228,7 +238,7 @@ public class BattleManager : MonoBehaviour
         switch (eff.effectType)
         {
             case RelicEffectType.GainBlock:    player.AddBlock(eff.value);           break;
-            case RelicEffectType.GainMana:     currentMana += eff.value;             break;
+            case RelicEffectType.GainMana:     player.currentMana += eff.value;      break;
             case RelicEffectType.DrawCard:     player.deck.DrawCards(eff.value);     break;
             case RelicEffectType.GainStrength: player.strengthStack += eff.value;    break;
             case RelicEffectType.HealHp:       player.Heal(eff.value);               break;

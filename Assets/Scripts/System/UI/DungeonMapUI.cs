@@ -18,10 +18,15 @@ public class DungeonMapUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI playerGoldText;
     [SerializeField] private TextMeshProUGUI playerRelicsText;
     [SerializeField] private TextMeshProUGUI playerHungerText;
+    [SerializeField] private TextMeshProUGUI playerCostText;
 
     [Header("인벤토리")]
     [SerializeField] private InventoryUI inventoryUI;
     [SerializeField] private Button      inventoryBtn;
+
+    [Header("맵 카드 사용")]
+    [SerializeField] private MapCardUI mapCardUI;
+    [SerializeField] private Button    mapCardBtn;
 
     private const float MinTileSize = 14f;
     private const float MaxTileSize = 48f;
@@ -68,12 +73,14 @@ public class DungeonMapUI : MonoBehaviour
     {
         TileSize = PlayerPrefs.GetFloat(TileSizePrefKey, DefaultTileSize);
         inventoryBtn?.onClick.AddListener(() => inventoryUI?.Open());
+        mapCardBtn?.onClick.AddListener(() => mapCardUI?.Open());
         Refresh();
     }
 
     void OnDisable()
     {
         inventoryBtn?.onClick.RemoveAllListeners();
+        mapCardBtn?.onClick.RemoveAllListeners();
     }
 
     void Update()
@@ -130,6 +137,8 @@ public class DungeonMapUI : MonoBehaviour
         playerGoldText.text  = $"골드  {p.gold}";
         if (playerHungerText != null)
             playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " (위험!)" : "");
+        if (playerCostText != null)
+            playerCostText.text = $"코스트  {p.currentMana} / {p.maxMana}";
 
         var relicNames = new System.Text.StringBuilder();
         foreach (string id in p.relics.GetAll())

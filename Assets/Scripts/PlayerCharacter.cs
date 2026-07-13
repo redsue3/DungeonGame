@@ -10,6 +10,11 @@ public class PlayerCharacter : Character
     public int maxMana;
     public int startHandSize;
 
+    // 현재 코스트 - 전투/맵 공용으로 상주한다. 전투 2턴부터는 매 턴 풀 리필,
+    // 맵에서는 카드 사용으로 소모하고 이동으로 회복 (MapCardSystem 담당).
+    public int currentMana;
+    public int stepsSinceCostRegen;
+
     public int strengthStack;
     public int dexterityStack;
 
@@ -55,13 +60,15 @@ public class PlayerCharacter : Character
         maxHp         = data.maxHp;
         currentHp     = data.maxHp;
         maxMana       = data.maxMana;
+        currentMana   = data.maxMana;
         startHandSize = data.startHandSize;
         attackBonus   = data.baseAttackBonus;
     }
 
-    public void OnTurnStart()
+    // resetBlock=false: 전투 첫 턴 - 맵에서 미리 쳐둔 방어막을 유지한 채 상태이상만 진행
+    public void OnTurnStart(bool resetBlock = true)
     {
-        ResetBlock();
+        if (resetBlock) ResetBlock();
         ProcessStatusEffects();
     }
 

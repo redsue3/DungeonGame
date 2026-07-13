@@ -16,6 +16,7 @@ public class SaveData
     public int   dexterityStack;
     public int   hunger;
     public int   maxHunger;
+    public int   currentMana = -1; // -1 = 필드가 없던 구버전 세이브 표시 → 로드 시 maxMana로 복원
     public CardSnapshot[] deckCards;
     public string[] relicIds;
     public string[] foodIds;
@@ -65,6 +66,7 @@ public static class SaveSystem
             dexterityStack = player.dexterityStack,
             hunger         = player.hunger,
             maxHunger      = player.maxHunger,
+            currentMana    = player.currentMana,
             deckCards      = ExtractDeckSnapshots(player.deck),
             relicIds       = player.relics.GetAll().ToArray(),
             foodIds        = ExtractFoodIds(player.inventory),
@@ -101,6 +103,7 @@ public static class SaveSystem
         player.dexterityStack= data.dexterityStack;
         player.hunger        = data.maxHunger > 0 ? data.hunger    : HungerSystem.MaxHunger;
         player.maxHunger      = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
+        player.currentMana   = data.currentMana >= 0 ? data.currentMana : player.maxMana;
 
         // 덱 복원 - CardDatabase에 등록된 카드는 최신 밸런스로, 성소 카드처럼
         // 등록되지 않은 카드는 저장된 스냅샷 그대로 복원한다.
