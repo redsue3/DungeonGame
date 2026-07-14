@@ -7,20 +7,14 @@ public class Deck
     private List<Card> hand        = new List<Card>();
     private List<Card> discardPile = new List<Card>();
 
-    public int HandCount    => hand.Count;
     public int DrawCount    => drawPile.Count;
     public int DiscardCount => discardPile.Count;
 
     public void AddCard(Card card) => drawPile.Add(card);
 
-    public bool RemoveCard(string cardId)
-    {
-        Card found = drawPile.Find(c => c.id == cardId);
-        if (found != null) { drawPile.Remove(found); return true; }
-        found = discardPile.Find(c => c.id == cardId);
-        if (found != null) { discardPile.Remove(found); return true; }
-        return false;
-    }
+    // 인스턴스 기준 제거 - 같은 id 카드가 여러 장(성소 성장형처럼 스탯이 다른 사본 포함)이어도 정확히 그 카드만 지운다
+    public bool RemoveCard(Card card) =>
+        drawPile.Remove(card) || hand.Remove(card) || discardPile.Remove(card);
 
     public void DrawCards(int count)
     {
@@ -34,7 +28,7 @@ public class Deck
         }
     }
 
-    // 단일 타겟 편의 오버로드 (Unity BattleManager 하위 호환)
+    // 단일 타겟 편의 오버로드
     public bool PlayCard(int handIndex, Character target, Character caster, int attackBonus = 0)
     {
         return PlayCard(handIndex, new List<Character> { target }, caster, attackBonus);
@@ -63,35 +57,21 @@ public class Deck
             foreach (Character target in targets)
                 target.TakeDamage(DamageCalculator.Calculate(card.damage, finalAttackBonus));
 
-            if (card.growOnUse > 0) card.damage += card.growOnUse; // 성소의 성장형 카드 - 사용할수록 영구 강화
+            if (card.growOnUse > 0) // 성소의 성장형 카드 - 사용할수록 영구 강화
+            {
+                card.damage += card.growOnUse;
+                card.RebuildDescription();
+            }
         }
         foreach (Character target in targets)
         {
-            if (card.poisonApply > 0)
-                target.poisonStack += card.poisonApply;
-            if (card.burnApply > 0)
-                target.burnStack += card.burnApply;
+            if (card.poisonApply > 0) target.poisonStack += card.poisonApply;
+            if (card.burnApply > 0)   target.burnStack   += card.burnApply;
         }
 
-        // 시전자 효과
-        if (card.block > 0)
-        {
-            int bonus = (caster is PlayerCharacter pc) ? pc.GetFinalBlockBonus() : 0;
-            if (caster is PlayerCharacter defender) bonus += defender.ConsumePendingDefenseBonus();
-            caster.AddBlock(card.block + bonus);
-        }
-        if (card.drawCount > 0)    DrawCards(card.drawCount);
-        if (card.healAmount > 0)   caster.Heal(card.healAmount);
-        if (card.strengthGain > 0 && caster is PlayerCharacter pcs)
-            pcs.strengthStack += card.strengthGain;
-        if (card.selfDamage > 0)   caster.TakeDamage(card.selfDamage);
-
-        // 성소 유틸 카드 - 다음 공격/방어 카드에 적용될 보너스 예약
-        if (caster is PlayerCharacter buffer)
-        {
-            if (card.buffNextAttack > 0)  buffer.pendingAttackBonus  += card.buffNextAttack;
-            if (card.buffNextDefense > 0) buffer.pendingDefenseBonus += card.buffNextDefense;
-        }
+        // 시전자 효과 - 맵 탐색(MapCardSystem)과 공유하는 규칙. 드로우만 덱이 있어야 해서 여기서 처리.
+        card.ApplyCasterEffects(caster);
+        if (card.drawCount > 0) DrawCards(card.drawCount);
     }
 
     public void DiscardHand()
@@ -115,8 +95,7 @@ public class Deck
         Debug.Log("덱을 다시 섞었습니다.");
     }
 
-    public List<Card> GetHand()     => hand;
-    public List<Card> GetDrawPile() => drawPile;
+    public List<Card> GetHand() => hand;
 
     public List<Card> GetAllCards()
     {

@@ -16,7 +16,5 @@ public static class FoodDatabase
     public static FoodData Get(string id) =>
         table.TryGetValue(id, out FoodData data) ? data : null;
 
-    public static bool Exists(string id) => table.ContainsKey(id);
-
     public static List<FoodData> GetAll() => new List<FoodData>(table.Values);
 }

@@ -144,11 +144,11 @@ public static class SceneSetup
         bg.color = EntryBg;
         go.AddComponent<Button>();
 
-        var manaBg = Img(go.transform, "ManaBg", new Color(0.15f, 0.35f, 0.8f));
-        Anchor(manaBg.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(8, -44), new Vector2(44, -8));
+        var costBg = Img(go.transform, "CostBg", new Color(0.15f, 0.35f, 0.8f));
+        Anchor(costBg.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(8, -44), new Vector2(44, -8));
 
-        var manaText = Text(go.transform, "ManaCost", "1", 24, TextAlignmentOptions.Center, Color.white);
-        Anchor(manaText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(8, -44), new Vector2(44, -8));
+        var costText = Text(go.transform, "Cost", "1", 24, TextAlignmentOptions.Center, Color.white);
+        Anchor(costText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(8, -44), new Vector2(44, -8));
 
         var nameText = Text(go.transform, "Name", "카드", 20, TextAlignmentOptions.Center, Color.white);
         Anchor(nameText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(50, -40), new Vector2(-8, -8));
@@ -162,7 +162,7 @@ public static class SceneSetup
 
         var ui = go.AddComponent<CardUI>();
         Bind(ui, "cardNameText", nameText);
-        Bind(ui, "manaCostText", manaText);
+        Bind(ui, "costText", costText);
         Bind(ui, "descText", descText);
         Bind(ui, "typeTag", typeTag);
         Bind(ui, "cardBg", bg);
@@ -308,7 +308,7 @@ public static class SceneSetup
 
         var classNameText    = TextLine(infoBox.transform, "ClassName", "전사", 28, TextWhite, 44);
         var hpText            = TextLine(infoBox.transform, "HpText", "HP 80", 20, TextWhite, 32);
-        var manaText           = TextLine(infoBox.transform, "ManaText", "코스트 3", 20, TextWhite, 32);
+        var costText           = TextLine(infoBox.transform, "CostText", "코스트 3", 20, TextWhite, 32);
         var handSizeText       = TextLine(infoBox.transform, "HandSizeText", "시작 패 5장", 20, TextWhite, 32);
         var attackBonusText    = TextLine(infoBox.transform, "AttackBonusText", "공격 보너스 +2", 20, TextWhite, 32);
         var starterCardsText   = TextLine(infoBox.transform, "StarterCardsText", "스타터 덱: ...", 16, TextDim, 60);
@@ -324,7 +324,7 @@ public static class SceneSetup
         Bind(ui, "paladinBtn", paladinBtn);
         Bind(ui, "classNameText", classNameText);
         Bind(ui, "hpText", hpText);
-        Bind(ui, "manaText", manaText);
+        Bind(ui, "costText", costText);
         Bind(ui, "handSizeText", handSizeText);
         Bind(ui, "attackBonusText", attackBonusText);
         Bind(ui, "starterCardsText", starterCardsText);
@@ -497,7 +497,7 @@ public static class SceneSetup
         StretchFull(playerHpText.rectTransform);
 
         var playerBlockText  = TextLine(top.transform, "BlockText", "", 18, new Color(0.5f, 0.75f, 1f), 32, 90);
-        var playerManaText   = TextLine(top.transform, "ManaText", "코스트 ◆◆◆", 18, new Color(0.6f, 0.8f, 1f), 32, 200);
+        var playerCostText   = TextLine(top.transform, "CostText", "코스트 ◆◆◆", 18, new Color(0.6f, 0.8f, 1f), 32, 200);
         var playerStatusText = TextLine(top.transform, "StatusText", "", 16, new Color(0.6f, 0.9f, 0.6f), 32, 240);
         var turnText          = TextLine(top.transform, "TurnText", "당신의 턴", 20, new Color(1f, 0.85f, 0.3f), 32, 150);
 
@@ -536,7 +536,7 @@ public static class SceneSetup
         Bind(ui, "playerHpSlider", playerHpSlider);
         Bind(ui, "playerHpText", playerHpText);
         Bind(ui, "playerBlockText", playerBlockText);
-        Bind(ui, "playerManaText", playerManaText);
+        Bind(ui, "playerCostText", playerCostText);
         Bind(ui, "playerStatusText", playerStatusText);
         Bind(ui, "enemyParent", enemyArea.transform);
         Bind(ui, "enemyPanelPrefab", enemyPanelPrefab);

@@ -1,22 +1,21 @@
 using System.IO;
 using UnityEngine;
 
+// 주의: SaveData/CardSnapshot의 필드명이 그대로 save.json의 키가 된다 (JsonUtility).
+// 코드가 mana → cost로 리네이밍된 뒤에도 예전 세이브를 읽을 수 있도록 JSON 키는 옛 이름을 유지한다.
 [System.Serializable]
 public class SaveData
 {
     public CharacterClass characterClass;
     public int   currentHp;
-    public int   maxHp;
     public int   gold;
     public int   currentLayer;
-    public int   currentStage;
     public int   poisonStack;
     public int   burnStack;
     public int   strengthStack;
-    public int   dexterityStack;
     public int   hunger;
     public int   maxHunger;
-    public int   currentMana = -1; // -1 = 필드가 없던 구버전 세이브 표시 → 로드 시 maxMana로 복원
+    public int   currentMana = -1; // 현재 코스트(currentCost). -1 = 필드가 없던 구버전 세이브 표시 → 로드 시 최대 코스트로 복원
     public CardSnapshot[] deckCards;
     public string[] relicIds;
     public string[] foodIds;
@@ -30,7 +29,7 @@ public class CardSnapshot
 {
     public string   id;
     public string   cardName;
-    public int      manaCost;
+    public int      manaCost; // 카드 코스트(cost) - JSON 키 하위호환 때문에 옛 이름 유지
     public CardType cardType;
     public bool     isAoe;
     public int      damage;
@@ -50,23 +49,20 @@ public static class SaveSystem
 {
     private static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
 
-    public static void Save(PlayerCharacter player, int layer, int stage = 0)
+    public static void Save(PlayerCharacter player, int layer)
     {
         var data = new SaveData
         {
             characterClass = player.characterClass,
             currentHp      = player.currentHp,
-            maxHp          = player.maxHp,
             gold           = player.gold,
             currentLayer   = layer,
-            currentStage   = stage,
             poisonStack    = player.poisonStack,
             burnStack      = player.burnStack,
             strengthStack  = player.strengthStack,
-            dexterityStack = player.dexterityStack,
             hunger         = player.hunger,
             maxHunger      = player.maxHunger,
-            currentMana    = player.currentMana,
+            currentMana    = player.currentCost,
             deckCards      = ExtractDeckSnapshots(player.deck),
             relicIds       = player.relics.GetAll().ToArray(),
             foodIds        = ExtractFoodIds(player.inventory),
@@ -93,21 +89,31 @@ public static class SaveSystem
     // 세이브 데이터로 플레이어 복원
     public static PlayerCharacter RestorePlayer(SaveData data)
     {
-        var player = PlayerFactory.Create(data.characterClass);
+        // PlayerFactory 대신 직접 생성 - 스타터 덱/시작 식료품은 어차피 세이브 내용으로 대체된다
+        var player = new PlayerCharacter(data.characterClass);
 
-        player.currentHp     = data.currentHp;
+        // 유물부터 복원 - 상시 스탯(Passive)을 다시 적용해야 최대 HP/최대 코스트/패 수가 저장 당시와 같아진다.
+        // 획득 시 1회짜리 OnAcquire 효과(정화의 부적/혼돈의 프리즘의 덱 조작)는 재실행하면 안 되므로 호출하지 않는다.
+        if (data.relicIds != null)
+        {
+            foreach (string relicId in data.relicIds)
+            {
+                player.relics.Add(relicId);
+                RelicDatabase.ApplyPassiveStats(relicId, player);
+            }
+        }
+
+        player.currentHp     = Mathf.Min(data.currentHp, player.maxHp);
         player.gold          = data.gold;
         player.poisonStack   = data.poisonStack;
         player.burnStack     = data.burnStack;
         player.strengthStack = data.strengthStack;
-        player.dexterityStack= data.dexterityStack;
         player.hunger        = data.maxHunger > 0 ? data.hunger    : HungerSystem.MaxHunger;
-        player.maxHunger      = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
-        player.currentMana   = data.currentMana >= 0 ? data.currentMana : player.maxMana;
+        player.maxHunger     = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
+        player.currentCost   = data.currentMana >= 0 ? Mathf.Min(data.currentMana, player.maxCost) : player.maxCost;
 
         // 덱 복원 - CardDatabase에 등록된 카드는 최신 밸런스로, 성소 카드처럼
         // 등록되지 않은 카드는 저장된 스냅샷 그대로 복원한다.
-        player.deck = new Deck();
         if (data.deckCards != null)
         {
             foreach (CardSnapshot snap in data.deckCards)
@@ -118,12 +124,7 @@ public static class SaveSystem
             }
         }
 
-        // 유물 복원
-        foreach (string relicId in data.relicIds)
-            player.relics.Add(relicId);
-
         // 인벤토리(식료품) 복원
-        player.inventory = new Inventory();
         if (data.foodIds != null)
         {
             for (int i = 0; i < data.foodIds.Length; i++)
@@ -145,7 +146,7 @@ public static class SaveSystem
             Card c = cards[i];
             snaps[i] = new CardSnapshot
             {
-                id = c.id, cardName = c.cardName, manaCost = c.manaCost, cardType = c.cardType, isAoe = c.isAoe,
+                id = c.id, cardName = c.cardName, manaCost = c.cost, cardType = c.cardType, isAoe = c.isAoe,
                 damage = c.damage, block = c.block, drawCount = c.drawCount, healAmount = c.healAmount,
                 strengthGain = c.strengthGain, poisonApply = c.poisonApply, burnApply = c.burnApply, selfDamage = c.selfDamage,
                 growOnUse = c.growOnUse, buffNextAttack = c.buffNextAttack, buffNextDefense = c.buffNextDefense,

@@ -13,6 +13,8 @@ public class DungeonManager : MonoBehaviour
     public DungeonFloor    CurrentFloor  { get; private set; }
     public int             CurrentLayer  => currentLayer;
 
+    private const int FinalLayer = 3; // 이 계층의 보스를 잡으면 게임 승리
+
     private int            currentLayer = 1;
     private RoomInfo       currentRoom;   // 지금 상호작용 중인 방 (전투/휴식/상점/성소 공용)
     private BattleReward   pendingReward;
@@ -71,41 +73,14 @@ public class DungeonManager : MonoBehaviour
         if (TryEngageEnemyAt(nx, ny)) return true;
 
         // 적 AI 스텝 - 쫓아오던 적이 플레이어에게 닿으면 그 적이 전투를 건다
-        EnemySpawn attacker = StepEnemies();
+        EnemySpawn attacker = EnemyAiSystem.StepAll(CurrentFloor);
         if (attacker != null)
         {
             Engage(attacker);
             return true;
         }
 
-        // 휴식/상점/성소는 아이콘이 표시되는 방 중심 타일에 직접 접촉했을 때만 발동 (방 전체 범위 아님)
-        RoomInfo room = CurrentFloor.RoomAt(nx, ny);
-        if (room != null && !room.isCleared && nx == room.CenterX && ny == room.CenterY)
-        {
-            if (room.roomType == TileType.Rest)
-            {
-                currentRoom = room;
-                TransitionTo(GameState.Rest);
-                return true;
-            }
-            if (room.roomType == TileType.Shop)
-            {
-                currentRoom = room;
-                shop.Generate(currentLayer, Player);
-                shopCardRemovePurchased = false;
-                shopPurchasedThisVisit  = false;
-                TransitionTo(GameState.Shop);
-                return true;
-            }
-            if (room.roomType == TileType.Shrine)
-            {
-                currentRoom = room;
-                pendingShrineOptions = ShrineSystem.GenerateOptions(Player);
-                TransitionTo(GameState.Shrine);
-                return true;
-            }
-        }
-
+        TryEnterRoomEvent(nx, ny);
         return true;
     }
 
@@ -133,105 +108,53 @@ public class DungeonManager : MonoBehaviour
         TransitionTo(GameState.Battle);
     }
 
-    // 시야선(LOS) 확인 후 감지 → BFS로 최단 경로 추적. 플레이어에게 닿은 적(전투 개시자)이 있으면 반환.
-    private EnemySpawn StepEnemies()
+    // 휴식/상점/성소는 아이콘이 표시되는 방 중심 타일에 직접 접촉했을 때만 발동 (방 전체 범위 아님)
+    private bool TryEnterRoomEvent(int x, int y)
     {
-        foreach (EnemySpawn e in CurrentFloor.Enemies)
+        RoomInfo room = CurrentFloor.RoomAt(x, y);
+        if (room == null || room.isCleared || x != room.CenterX || y != room.CenterY) return false;
+
+        switch (room.roomType)
         {
-            if (e.isDead) continue;
+            case TileType.Rest:
+                EnterRoom(room, GameState.Rest);
+                return true;
 
-            // 시야선이 뚫려 있으면 Chasing으로 전환
-            if (e.state == EnemyAiState.Idle &&
-                CurrentFloor.HasLineOfSight(e.x, e.y, CurrentFloor.PlayerX, CurrentFloor.PlayerY))
-            {
-                int dist2 = (e.x - CurrentFloor.PlayerX) * (e.x - CurrentFloor.PlayerX) +
-                            (e.y - CurrentFloor.PlayerY) * (e.y - CurrentFloor.PlayerY);
-                if (dist2 <= FloorGenerator.EnemyDetectRadius * FloorGenerator.EnemyDetectRadius)
-                    e.state = EnemyAiState.Chasing;
-            }
+            case TileType.Shop:
+                shop.Generate(currentLayer, Player);
+                shopCardRemovePurchased = false;
+                shopPurchasedThisVisit  = false;
+                EnterRoom(room, GameState.Shop);
+                return true;
 
-            if (e.state != EnemyAiState.Chasing) continue;
-            if (StepTowardPlayer(e)) return e;
+            case TileType.Shrine:
+                pendingShrineOptions = ShrineSystem.GenerateOptions(Player);
+                EnterRoom(room, GameState.Shrine);
+                return true;
+
+            default:
+                return false;
         }
-        return null;
     }
 
-    // BFS 최단 경로로 한 칸 이동. 다음 칸이 플레이어 타일이면 이동 대신 접촉(전투 개시) 신호를 반환.
-    private bool StepTowardPlayer(EnemySpawn e)
+    private void EnterRoom(RoomInfo room, GameState state)
     {
-        var path = BfsPath(e.x, e.y, CurrentFloor.PlayerX, CurrentFloor.PlayerY);
-        if (path == null || path.Count < 2) return false;
-
-        var next = path[1];
-        if (next.x == CurrentFloor.PlayerX && next.y == CurrentFloor.PlayerY) return true;
-
-        TryStepEnemy(e, next.x - e.x, next.y - e.y);
-        return false;
+        currentRoom = room;
+        TransitionTo(state);
     }
 
-    private List<(int x, int y)> BfsPath(int sx, int sy, int tx, int ty)
-    {
-        var start = (x: sx, y: sy);
-        var goal  = (x: tx, y: ty);
-
-        var queue  = new Queue<(int x, int y)>();
-        var parent = new Dictionary<(int x, int y), (int x, int y)>();
-        queue.Enqueue(start);
-        parent[start] = start;
-
-        int[] ddx = { 0, 0, 1, -1 };
-        int[] ddy = { 1, -1, 0, 0 };
-
-        while (queue.Count > 0)
-        {
-            var cur = queue.Dequeue();
-            if (cur == goal) break;
-
-            for (int i = 0; i < 4; i++)
-            {
-                var next = (x: cur.x + ddx[i], y: cur.y + ddy[i]);
-                if (!CurrentFloor.IsWalkable(next.x, next.y)) continue;
-                if (parent.ContainsKey(next)) continue;
-                // 플레이어 칸 자체는 목표로 허용, 다른 적이 막고 있으면 우회
-                if (next != goal && CurrentFloor.EnemyAt(next.x, next.y) != null) continue;
-                parent[next] = cur;
-                queue.Enqueue(next);
-            }
-        }
-
-        if (!parent.ContainsKey(goal)) return null;
-
-        var path = new List<(int x, int y)>();
-        for (var node = goal; node != start; node = parent[node]) path.Add(node);
-        path.Add(start);
-        path.Reverse();
-        return path;
-    }
-
-    private bool TryStepEnemy(EnemySpawn e, int dx, int dy)
-    {
-        if (dx == 0 && dy == 0) return false;
-        int nx = e.x + dx, ny = e.y + dy;
-        if (!CurrentFloor.IsWalkable(nx, ny)) return false;
-        if (CurrentFloor.EnemyAt(nx, ny) != null) return false;
-        if (nx == CurrentFloor.PlayerX && ny == CurrentFloor.PlayerY) return false; // 접촉 전투는 StepTowardPlayer가 처리
-
-        e.x = nx;
-        e.y = ny;
-        return true;
-    }
-
-    // BattleManager에서 호출
-    public void OnBattleWon()
+    // BattleManager에서 호출 - 처치한 적 목록으로 보상을 굴린다
+    public void OnBattleWon(List<Enemy> defeatedEnemies)
     {
         if (currentRoom != null)
         {
             currentRoom.isCleared = true;
-            foreach (EnemySpawn s in CurrentFloor.AliveEnemiesInRoom(currentRoom.id))
+            foreach (EnemySpawn s in CurrentFloor.AliveEnemiesInRoom(currentRoom.id).ToList())
                 s.isDead = true;
         }
 
-        int gold = RelicDatabase.ApplyGoldBonus(LootTable.RollGold(currentLayer), Player);
+        // 골드는 처치한 적별 보상(EnemyData의 rewardGold 범위) 합산 - 조우 난이도에 자연히 비례한다
+        int gold = RelicDatabase.ApplyGoldBonus(defeatedEnemies.Sum(e => e.RollGoldReward()), Player);
         Player.gold += gold;
         Debug.Log($"[DungeonManager] 전투 승리! 골드 +{gold}");
 
@@ -244,7 +167,6 @@ public class DungeonManager : MonoBehaviour
 
         bool isBoss  = currentRoom?.roomType == TileType.Boss;
         bool isElite = currentRoom?.roomType == TileType.EliteEnemy;
-        int  cardCount = isBoss ? 3 : (isElite ? 2 : 1);
 
         string relicId = null;
         if (isBoss || isElite)
@@ -253,24 +175,25 @@ public class DungeonManager : MonoBehaviour
             if (relicId != null)
             {
                 Player.relics.Add(relicId);
-                RelicDatabase.ApplyPassiveEffects(relicId, Player);
+                RelicDatabase.ApplyAcquisitionEffects(relicId, Player);
                 Debug.Log($"[DungeonManager] 유물 획득: {RelicDatabase.Get(relicId)?.displayName}");
             }
         }
 
-        pendingReward = new BattleReward
-        {
-            cardChoices = LootTable.RollCardRewards(currentLayer, cardCount),
-            gold        = gold,
-            foodId      = foodId,
-            relicId     = relicId,
-        };
-
-        if (isBoss && currentLayer >= 3)
+        // 마지막 계층 보스 처치 → 바로 승리. 보상 화면을 거치지 않으므로 카드 보상은 굴리지 않는다.
+        if (isBoss && currentLayer >= FinalLayer)
         {
             TransitionTo(GameState.Victory);
             return;
         }
+
+        pendingReward = new BattleReward
+        {
+            cardChoices = LootTable.RollCardRewards(currentLayer, isBoss ? 3 : isElite ? 2 : 1),
+            gold        = gold,
+            foodId      = foodId,
+            relicId     = relicId,
+        };
 
         if (isBoss)
         {
@@ -331,11 +254,12 @@ public class DungeonManager : MonoBehaviour
         return success;
     }
 
-    // 카드 제거 서비스 사용 - UI에서 카드 선택 후 호출
-    public bool RemoveCardFromDeck(string cardId)
+    // 카드 제거 서비스 사용 - UI에서 카드 선택 후 호출.
+    // 같은 id가 여러 장이어도 고른 그 카드(인스턴스)만 제거된다.
+    public bool RemoveCardFromDeck(Card card)
     {
         if (!shopCardRemovePurchased) return false;
-        bool removed = shop.RemoveCard(cardId, Player);
+        bool removed = shop.RemoveCard(card, Player);
         if (removed) shopCardRemovePurchased = false;
         return removed;
     }

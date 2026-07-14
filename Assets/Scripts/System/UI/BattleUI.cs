@@ -10,7 +10,7 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private Slider          playerHpSlider;
     [SerializeField] private TextMeshProUGUI playerHpText;
     [SerializeField] private TextMeshProUGUI playerBlockText;
-    [SerializeField] private TextMeshProUGUI playerManaText;
+    [SerializeField] private TextMeshProUGUI playerCostText;
     [SerializeField] private TextMeshProUGUI playerStatusText;  // 독/화상/힘
 
     [Header("적 영역")]
@@ -30,11 +30,14 @@ public class BattleUI : MonoBehaviour
     private readonly List<GameObject> handObjects  = new List<GameObject>();
     private readonly List<GameObject> enemyObjects = new List<GameObject>();
 
-    private int selectedTargetIndex = 0;
+    // 단일 공격 카드가 때릴 적. 인덱스가 아니라 참조로 들고 있어야
+    // 죽은 적이 목록에서 빠져도 엉뚱한 적을 때리지 않는다.
+    private Enemy selectedTarget;
 
     void OnEnable()
     {
         endTurnBtn.onClick.AddListener(OnEndTurn);
+        selectedTarget = null; // 새 전투 - 이전 전투의 적 참조를 버린다
         Refresh();
     }
 
@@ -61,13 +64,13 @@ public class BattleUI : MonoBehaviour
         playerHpText.text    = $"{player.currentHp} / {player.maxHp}";
         playerBlockText.text = player.block > 0 ? $"방어 {player.block}" : "";
 
-        int currentMana = BattleManager.Instance != null
-            ? BattleManager.Instance.CurrentMana : player.maxMana;
-        playerManaText.text  = BuildManaPips(currentMana, player.maxMana);
+        int currentCost = BattleManager.Instance != null
+            ? BattleManager.Instance.CurrentCost : player.maxCost;
+        playerCostText.text = BuildCostPips(currentCost, player.maxCost);
 
         var sb = new System.Text.StringBuilder();
-        if (player.poisonStack  > 0) sb.Append($"독 {player.poisonStack}  ");
-        if (player.burnStack    > 0) sb.Append($"화상 {player.burnStack}  ");
+        if (player.poisonStack   > 0) sb.Append($"독 {player.poisonStack}  ");
+        if (player.burnStack     > 0) sb.Append($"화상 {player.burnStack}  ");
         if (player.strengthStack > 0) sb.Append($"힘 +{player.strengthStack}");
         playerStatusText.text = sb.ToString().TrimEnd();
     }
@@ -84,7 +87,7 @@ public class BattleUI : MonoBehaviour
 
         for (int i = 0; i < hand.Count; i++)
         {
-            int idx  = i;
+            int idx   = i;
             Card card = hand[i];
 
             GameObject obj = Instantiate(cardPrefab, handParent);
@@ -96,11 +99,11 @@ public class BattleUI : MonoBehaviour
             var btn = obj.GetComponent<Button>();
             if (btn != null)
             {
-                int currentMana = BattleManager.Instance?.CurrentMana ?? 0;
-                btn.interactable = card.manaCost <= currentMana;
+                int currentCost = BattleManager.Instance?.CurrentCost ?? 0;
+                btn.interactable = card.cost <= currentCost;
                 btn.onClick.AddListener(() =>
                 {
-                    BattleManager.Instance?.UseCard(idx, selectedTargetIndex);
+                    BattleManager.Instance?.UseCard(idx, selectedTarget);
                     Refresh();
                 });
             }
@@ -118,22 +121,26 @@ public class BattleUI : MonoBehaviour
         var enemies = BattleManager.Instance?.GetEnemies();
         if (enemies == null) return;
 
-        for (int i = 0; i < enemies.Count; i++)
-        {
-            if (!enemies[i].IsAlive) continue;
+        // 아직 타겟이 없거나 선택했던 적이 죽었으면 첫 번째 생존 적으로
+        if (selectedTarget == null || !selectedTarget.IsAlive)
+            selectedTarget = enemies.Find(e => e.IsAlive);
 
-            int idx = i;
+        foreach (Enemy enemy in enemies)
+        {
+            if (!enemy.IsAlive) continue;
+
+            Enemy captured = enemy;
             GameObject obj = Instantiate(enemyPanelPrefab, enemyParent);
             enemyObjects.Add(obj);
 
             var ui = obj.GetComponent<EnemyPanelUI>();
-            if (ui != null) ui.Setup(enemies[i], idx == selectedTargetIndex);
+            if (ui != null) ui.Setup(enemy, enemy == selectedTarget);
 
             var btn = obj.GetComponent<Button>();
             if (btn != null)
                 btn.onClick.AddListener(() =>
                 {
-                    selectedTargetIndex = idx;
+                    selectedTarget = captured;
                     RefreshEnemies();
                 });
         }
@@ -145,10 +152,11 @@ public class BattleUI : MonoBehaviour
         Refresh();
     }
 
-    private string BuildManaPips(int current, int max)
+    private string BuildCostPips(int current, int max)
     {
         var sb = new System.Text.StringBuilder("코스트 ");
-        for (int i = 0; i < max; i++)
+        int pips = Mathf.Max(max, current); // 유물로 최대치를 넘겨 받은 코스트도 초과분까지 표시
+        for (int i = 0; i < pips; i++)
             sb.Append(i < current ? "◆" : "◇");
         return sb.ToString();
     }

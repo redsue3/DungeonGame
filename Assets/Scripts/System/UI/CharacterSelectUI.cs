@@ -13,7 +13,7 @@ public class CharacterSelectUI : MonoBehaviour
     [Header("직업 정보 표시")]
     [SerializeField] private TextMeshProUGUI classNameText;
     [SerializeField] private TextMeshProUGUI hpText;
-    [SerializeField] private TextMeshProUGUI manaText;
+    [SerializeField] private TextMeshProUGUI costText;
     [SerializeField] private TextMeshProUGUI handSizeText;
     [SerializeField] private TextMeshProUGUI attackBonusText;
     [SerializeField] private TextMeshProUGUI starterCardsText;
@@ -63,7 +63,7 @@ public class CharacterSelectUI : MonoBehaviour
 
         classNameText.text    = data.displayName;
         hpText.text           = $"HP  {data.maxHp}";
-        manaText.text         = $"코스트  {data.maxMana}";
+        costText.text         = $"코스트  {data.maxCost}";
         handSizeText.text     = $"시작 패  {data.startHandSize}장";
         attackBonusText.text  = $"공격 보너스  +{data.baseAttackBonus}";
         confirmBtnText.text   = $"{data.displayName} 선택";

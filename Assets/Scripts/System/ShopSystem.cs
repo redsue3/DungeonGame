@@ -85,7 +85,7 @@ public class ShopSystem
 
             case ShopItemType.Relic:
                 player.relics.Add(item.id);
-                RelicDatabase.ApplyPassiveEffects(item.id, player);
+                RelicDatabase.ApplyAcquisitionEffects(item.id, player);
                 Debug.Log($"[상점] 유물 구매: {item.id}");
                 break;
 
@@ -101,11 +101,11 @@ public class ShopSystem
         return true;
     }
 
-    // 카드 제거 서비스 사용 시 호출
-    public bool RemoveCard(string cardId, PlayerCharacter player)
+    // 카드 제거 서비스 사용 시 호출 - 같은 id가 여러 장이어도 UI에서 고른 그 카드(인스턴스)만 제거
+    public bool RemoveCard(Card card, PlayerCharacter player)
     {
-        bool removed = player.deck.RemoveCard(cardId);
-        if (removed) Debug.Log($"[상점] 카드 제거: {cardId}");
+        bool removed = player.deck.RemoveCard(card);
+        if (removed) Debug.Log($"[상점] 카드 제거: {card.cardName}");
         return removed;
     }
 
@@ -119,12 +119,17 @@ public class ShopSystem
         return available[Random.Range(0, available.Count)].id;
     }
 
+    // 뽑힌 식료품은 풀에서 제거해서 같은 품목이 두 번 진열되지 않게 한다
     private List<string> RollRandomFoods(int count)
     {
-        List<FoodData>  all    = FoodDatabase.GetAll();
-        List<string>    result = new List<string>();
-        for (int i = 0; i < count && all.Count > 0; i++)
-            result.Add(all[Random.Range(0, all.Count)].id);
+        List<FoodData> pool   = FoodDatabase.GetAll();
+        List<string>   result = new List<string>();
+        for (int i = 0; i < count && pool.Count > 0; i++)
+        {
+            int idx = Random.Range(0, pool.Count);
+            result.Add(pool[idx].id);
+            pool.RemoveAt(idx);
+        }
         return result;
     }
 }

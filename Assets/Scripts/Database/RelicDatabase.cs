@@ -32,8 +32,8 @@ public static class RelicDatabase
         ["war_horn"] = new RelicData
         {
             id = "war_horn", displayName = "전쟁의 뿔피리", rarity = RelicRarity.Uncommon,
-            description = "매 턴 시작 시 마나 +1",
-            effects = new[] { new RelicEffect { trigger = RelicTrigger.OnTurnStart, effectType = RelicEffectType.GainMana, value = 1 } }
+            description = "매 턴 시작 시 코스트 +1",
+            effects = new[] { new RelicEffect { trigger = RelicTrigger.OnTurnStart, effectType = RelicEffectType.GainCost, value = 1 } }
         },
         ["blood_ring"] = new RelicData
         {
@@ -62,10 +62,10 @@ public static class RelicDatabase
         ["demon_crown"] = new RelicData
         {
             id = "demon_crown", displayName = "마왕의 왕관", rarity = RelicRarity.Boss,
-            description = "최대 마나 +1, 전투 시작 시 힘 +2",
+            description = "최대 코스트 +1, 전투 시작 시 힘 +2",
             effects = new[]
             {
-                new RelicEffect { trigger = RelicTrigger.Passive,       effectType = RelicEffectType.BonusMaxMana,  value = 1 },
+                new RelicEffect { trigger = RelicTrigger.Passive,       effectType = RelicEffectType.BonusMaxCost,  value = 1 },
                 new RelicEffect { trigger = RelicTrigger.OnBattleStart, effectType = RelicEffectType.GainStrength,  value = 2 },
             }
         },
@@ -73,7 +73,7 @@ public static class RelicDatabase
         {
             id = "purifying_charm", displayName = "정화의 부적", rarity = RelicRarity.Uncommon,
             description = "획득 시 덱에서 무작위 카드 1장 제거",
-            effects = new[] { new RelicEffect { trigger = RelicTrigger.Passive, effectType = RelicEffectType.RemoveRandomCard, value = 1 } }
+            effects = new[] { new RelicEffect { trigger = RelicTrigger.OnAcquire, effectType = RelicEffectType.RemoveRandomCard, value = 1 } }
         },
         ["hawk_eye"] = new RelicData
         {
@@ -85,7 +85,7 @@ public static class RelicDatabase
         {
             id = "chaos_prism", displayName = "혼돈의 프리즘", rarity = RelicRarity.Rare,
             description = "획득 시 덱의 무작위 카드 1장을 다른 카드로 변환",
-            effects = new[] { new RelicEffect { trigger = RelicTrigger.Passive, effectType = RelicEffectType.TransformRandomCard, value = 1 } }
+            effects = new[] { new RelicEffect { trigger = RelicTrigger.OnAcquire, effectType = RelicEffectType.TransformRandomCard, value = 1 } }
         },
     };
 
@@ -98,8 +98,26 @@ public static class RelicDatabase
 
     public static List<RelicData> GetAll() => new List<RelicData>(table.Values);
 
-    // 유물 획득 시 Passive 효과 즉시 적용
-    public static void ApplyPassiveEffects(string relicId, PlayerCharacter player)
+    // 유물 획득 시점에 호출 - 상시 스탯(Passive) 적용 + 획득 시 1회(OnAcquire) 효과 실행
+    public static void ApplyAcquisitionEffects(string relicId, PlayerCharacter player)
+    {
+        ApplyPassiveStats(relicId, player);
+
+        RelicData data = Get(relicId);
+        if (data == null) return;
+        foreach (RelicEffect eff in data.effects)
+        {
+            if (eff.trigger != RelicTrigger.OnAcquire) continue;
+            switch (eff.effectType)
+            {
+                case RelicEffectType.RemoveRandomCard:    RemoveRandomCardFromDeck(player); break;
+                case RelicEffectType.TransformRandomCard: TransformRandomCardInDeck(player); break;
+            }
+        }
+    }
+
+    // 상시 스탯형 Passive만 적용 - 세이브 로드 복원 시에도 호출된다 (OnAcquire 1회성 효과는 여기서 재실행 금지)
+    public static void ApplyPassiveStats(string relicId, PlayerCharacter player)
     {
         RelicData data = Get(relicId);
         if (data == null) return;
@@ -112,20 +130,14 @@ public static class RelicDatabase
                     player.maxHp     += eff.value;
                     player.currentHp += eff.value;
                     break;
-                case RelicEffectType.BonusMaxMana:
-                    player.maxMana += eff.value;
+                case RelicEffectType.BonusMaxCost:
+                    player.maxCost += eff.value;
                     break;
                 case RelicEffectType.BonusHandSize:
                     player.startHandSize += eff.value;
                     break;
                 case RelicEffectType.BonusAttack:
                     player.attackBonus += eff.value;
-                    break;
-                case RelicEffectType.RemoveRandomCard:
-                    RemoveRandomCardFromDeck(player);
-                    break;
-                case RelicEffectType.TransformRandomCard:
-                    TransformRandomCardInDeck(player);
                     break;
                 // BonusGoldPct: 골드 계산 시 동적으로 적용 (여기선 처리 안 함)
             }
@@ -154,7 +166,7 @@ public static class RelicDatabase
         List<Card> all = player.deck.GetAllCards();
         if (all.Count == 0) return;
         Card target = all[UnityEngine.Random.Range(0, all.Count)];
-        player.deck.RemoveCard(target.id);
+        player.deck.RemoveCard(target);
         Debug.Log($"[유물] 덱에서 제거: {target.cardName}");
     }
 
@@ -170,7 +182,7 @@ public static class RelicDatabase
         Card replacement = CardDatabase.Create(rolled[0]);
         if (replacement == null) return;
 
-        player.deck.RemoveCard(target.id);
+        player.deck.RemoveCard(target);
         player.deck.AddCard(replacement);
         Debug.Log($"[유물] 카드 변환: {target.cardName} → {replacement.cardName}");
     }

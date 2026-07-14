@@ -66,6 +66,7 @@ public class DungeonMapUI : MonoBehaviour
 
     private DungeonFloor lastFloor;
     private readonly Dictionary<(int, int), GameObject> floorTileObjects = new Dictionary<(int, int), GameObject>();
+    private readonly Dictionary<(int, int), RoomInfo>   roomCenters      = new Dictionary<(int, int), RoomInfo>(); // 방 중심 좌표 → 방 (타일마다 선형 탐색하지 않게 캐싱)
     private GameObject playerMarker;
     private readonly Dictionary<int, GameObject> enemyMarkers = new Dictionary<int, GameObject>();
 
@@ -138,7 +139,7 @@ public class DungeonMapUI : MonoBehaviour
         if (playerHungerText != null)
             playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " (위험!)" : "");
         if (playerCostText != null)
-            playerCostText.text = $"코스트  {p.currentMana} / {p.maxMana}";
+            playerCostText.text = $"코스트  {p.currentCost} / {p.maxCost}";
 
         var relicNames = new System.Text.StringBuilder();
         foreach (string id in p.relics.GetAll())
@@ -157,6 +158,10 @@ public class DungeonMapUI : MonoBehaviour
         foreach (var obj in enemyMarkers.Values) Destroy(obj);
         enemyMarkers.Clear();
         if (playerMarker != null) Destroy(playerMarker);
+
+        roomCenters.Clear();
+        foreach (RoomInfo room in floor.Rooms)
+            roomCenters[(room.CenterX, room.CenterY)] = room;
 
         for (int x = 0; x < floor.Width; x++)
         {
@@ -204,9 +209,8 @@ public class DungeonMapUI : MonoBehaviour
             var lbl = obj.GetComponentInChildren<TextMeshProUGUI>();
             var btn = obj.GetComponent<Button>();
 
-            RoomInfo room = floor.RoomAt(x, y);
-            bool showRoomIcon = room != null && !room.isCleared && room.CenterX == x && room.CenterY == y
-                                 && roomIcon.TryGetValue(room.roomType, out string icon);
+            bool showRoomIcon = roomCenters.TryGetValue((x, y), out RoomInfo room)
+                                 && !room.isCleared && roomIcon.ContainsKey(room.roomType);
 
             if (showRoomIcon)
             {

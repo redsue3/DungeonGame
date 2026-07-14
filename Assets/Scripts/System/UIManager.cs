@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class UIManager : MonoBehaviour
@@ -15,41 +16,39 @@ public class UIManager : MonoBehaviour
     public GameObject gameOverPanel;
     public GameObject victoryPanel;
 
-    void Awake() => Instance = this;
+    private Dictionary<GameState, GameObject> panels;
+    private BattleUI battleUI;
+
+    void Awake()
+    {
+        Instance = this;
+
+        panels = new Dictionary<GameState, GameObject>
+        {
+            [GameState.CharacterSelect] = characterSelectPanel,
+            [GameState.DungeonMap]      = dungeonMapPanel,
+            [GameState.Battle]          = battlePanel,
+            [GameState.Reward]          = rewardPanel,
+            [GameState.Rest]            = restPanel,
+            [GameState.Shop]            = shopPanel,
+            [GameState.Shrine]          = shrinePanel,
+            [GameState.GameOver]        = gameOverPanel,
+            [GameState.Victory]         = victoryPanel,
+        };
+
+        battleUI = battlePanel != null ? battlePanel.GetComponentInChildren<BattleUI>(includeInactive: true) : null;
+    }
 
     public void ShowPanel(GameState state)
     {
-        HideAll();
-        switch (state)
-        {
-            case GameState.CharacterSelect: characterSelectPanel?.SetActive(true); break;
-            case GameState.DungeonMap:      dungeonMapPanel?.SetActive(true);      break;
-            case GameState.Battle:          battlePanel?.SetActive(true);           break;
-            case GameState.Reward:          rewardPanel?.SetActive(true);           break;
-            case GameState.Rest:            restPanel?.SetActive(true);             break;
-            case GameState.Shop:            shopPanel?.SetActive(true);             break;
-            case GameState.Shrine:          shrinePanel?.SetActive(true);           break;
-            case GameState.GameOver:        gameOverPanel?.SetActive(true);         break;
-            case GameState.Victory:         victoryPanel?.SetActive(true);          break;
-        }
+        foreach (GameObject panel in panels.Values)
+            panel?.SetActive(false);
+
+        if (panels.TryGetValue(state, out GameObject target))
+            target?.SetActive(true);
+
         Debug.Log($"[UIManager] 패널 전환 → {state}");
     }
 
-    public void RefreshBattle()
-    {
-        battlePanel?.GetComponentInChildren<BattleUI>()?.Refresh();
-    }
-
-    private void HideAll()
-    {
-        characterSelectPanel?.SetActive(false);
-        dungeonMapPanel?.SetActive(false);
-        battlePanel?.SetActive(false);
-        rewardPanel?.SetActive(false);
-        restPanel?.SetActive(false);
-        shopPanel?.SetActive(false);
-        shrinePanel?.SetActive(false);
-        gameOverPanel?.SetActive(false);
-        victoryPanel?.SetActive(false);
-    }
+    public void RefreshBattle() => battleUI?.Refresh();
 }

@@ -10,7 +10,7 @@ public static class PlayerDatabase
             characterClass     = CharacterClass.Warrior,
             displayName        = "전사",
             maxHp              = 80,
-            maxMana            = 3,
+            maxCost            = 3,
             startHandSize      = 5,
             baseAttackBonus    = 2,
             starterDeckCardIds = new[]
@@ -26,7 +26,7 @@ public static class PlayerDatabase
             characterClass     = CharacterClass.Rogue,
             displayName        = "도적",
             maxHp              = 65,
-            maxMana            = 3,
+            maxCost            = 3,
             startHandSize      = 6,
             baseAttackBonus    = 0,
             starterDeckCardIds = new[]
@@ -42,7 +42,7 @@ public static class PlayerDatabase
             characterClass     = CharacterClass.Mage,
             displayName        = "마법사",
             maxHp              = 55,
-            maxMana            = 4,
+            maxCost            = 4,
             startHandSize      = 5,
             baseAttackBonus    = 0,
             starterDeckCardIds = new[]
@@ -59,7 +59,7 @@ public static class PlayerDatabase
             characterClass     = CharacterClass.Paladin,
             displayName        = "성기사",
             maxHp              = 70,
-            maxMana            = 3,
+            maxCost            = 3,
             startHandSize      = 5,
             baseAttackBonus    = 1,
             starterDeckCardIds = new[]

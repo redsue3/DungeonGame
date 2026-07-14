@@ -439,4 +439,107 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 - 4단계(추후): 전투 자체를 그리드 위로 통합해서 전투 중 이동/도주/키이팅까지 가능하게.
 - 맵/마커 UI 다듬기 (7/8 "미해결 UI 피드백" 참고).
 
+---
+
+## 전체 코드 리뷰 — 수정 후보 목록 (2026-07-14, 아직 아무것도 안 고침)
+
+"코드를 아름답게" 정리 전 사전 조사. 스크립트 56개 전부 읽고 찾은 것들. **한 번에 몰아서 고칠 것 — 아래는 발견만 해둔 상태.**
+> **→ 같은 날 오후에 전부 처리 완료. 항목별 처리 내용은 맨 아래 "전체 코드 리뷰 반영" 항목 참고.**
+
+### A. 버그 (아름다움 이전에 실제로 틀린 것)
+
+1. **[심각] 세이브 로드 시 유물 Passive 스탯이 전부 증발** — `SaveSystem.RestorePlayer`가 `player.maxHp`를 복원하지 않고(`SaveData.maxHp`는 저장만 함), 유물도 `relics.Add(id)`만 하고 `ApplyPassiveEffects`를 다시 안 부름. 철심(+15 HP)·마왕의 왕관(+1 코스트)·뱀 어금니(패+1) 등이 이어하기 후 사라지고, currentHp > maxHp 상태도 가능. 단순히 로드 때 ApplyPassiveEffects를 재호출하면 정화의 부적/혼돈의 프리즘(획득 시 1회성 덱 조작)이 또 발동하는 함정이 있음 — 근본 원인은 `RelicTrigger.Passive`가 "상시 스탯"과 "획득 시 1회"를 한 트리거에 섞어둔 것. 트리거 분리(예: `OnAcquire`) 후 로드 시 상시 스탯만 재적용이 정석.
+
+2. **[심각] 집단전 타겟 인덱스 불일치로 엉뚱한 적 공격** — `BattleUI.RefreshEnemies`는 전체 `enemies` 리스트 인덱스(죽은 적 포함)를 `selectedTargetIndex`로 넘기는데, `BattleManager.BuildTargets`는 살아있는 적만 필터한 리스트(`alive`)를 그 인덱스로 참조함. 예: [생존, 사망, 생존]에서 세 번째 적을 선택하면 UI는 2를 넘기고 alive는 2칸뿐이라 fallback으로 0번을 때림. 인덱스 대신 Enemy 참조로 넘기거나 양쪽 기준을 통일해야 함. (+ 선택한 적이 죽었을 때 selectedTargetIndex 리셋도 없음)
+
+3. **0코스트 카드를 코스트 0 상태에서 쓰면 "리필 틈" 페널티 발동** — `BattleManager.UseCard`의 자동 턴종료 판정이 `currentMana <= 0` 현재값만 봐서, 이번 카드로 소진된 게 아니어도 걸림. 특히 맵에서 코스트 0으로 전투에 들어온 첫 턴엔 0코스트 카드 한 장에 턴이 강제 종료됨. "이 카드 사용으로 0이 됐을 때"(`card.manaCost > 0 && currentMana == 0`)로 좁혀야 함.
+
+4. **독/화상/자해로 죽인 적은 OnKill 유물(혈약 반지) 미발동** — 처치 판정이 `UseCard` 안에만 있어서 `EnemyTurn`의 상태이상 사망은 안 잡힘. 같은 맥락으로 `CheckHpBelowTriggers`(불사조의 재)도 적 공격 직후에만 호출돼서 독/화상/자해로 30% 이하가 되면 미발동.
+
+5. **플레이어가 자기 턴 중 사망(자해/독)해도 즉시 패배 처리가 안 됨** — `BattleLoop`의 사망 판정이 턴 경계에서만 돌아서, 어둠의 계약 자해 등으로 죽으면 "턴 종료"를 눌러야 GameOver로 넘어감. `UseCard` 뒤에 플레이어 생존 체크 추가 필요.
+
+6. **id 기반 카드 제거의 오제거 가능성** — `Deck.RemoveCard(string id)`는 같은 id 중 첫 장을 지움. 성소 성장형 카드처럼 같은 id에 스탯이 다른 카드가 공존하면 정화의 부적(`RemoveRandomCardFromDeck`)이 고른 카드와 실제 지워지는 카드가 달라질 수 있음. `RemoveCard(Card instance)` 오버로드가 정확함. (+ RemoveCard가 hand는 검색 안 함 — 지금은 상점에서만 써서 무해하지만 잠재 함정)
+
+7. **집단 조우 적 2마리가 같은 타일에 겹칠 수 있음** — `FloorGenerator.SpawnOne`이 방 안 무작위 좌표를 중복 체크 없이 뽑음. `EnemyAt`은 첫 놈만 반환하고 맵 마커도 겹쳐 보임.
+
+### B. 죽은 코드 (삭제 or 살리기 결정 필요)
+
+- `Enemy.RollGoldReward()` + `EnemyData.rewardGoldMin/Max` — 골드는 `LootTable.RollGold(layer)`로만 굴림. EnemyDatabase 13종에 정성껏 적어둔 적별 골드 데이터가 전부 안 쓰임. **살릴지(적별 골드가 더 맛있음) 지울지 결정.**
+- `DamageCalculator.CalculateWithCrit` — 어디서도 호출 안 함 (크리티컬 시스템 미구현).
+- `PlayerCharacter.dexterityStack` — 올려주는 코드가 없어 `GetFinalBlockBonus()`는 항상 0. 세이브에도 실려 다님.
+- `PlayerCharacter.currentFloor` — 미사용.
+- `Card.rarity` / `Card.classRestriction` / `CardRarity` enum — 7/5 카드 등급 시스템 1단계에서 만들고 어디서도 안 읽음 (등급 기반 드롭은 basicCardPool 가중치 방식으로 대체된 상태).
+- `EnemyData.baseBlock` — 13종 전부 0이고 EnemyFactory도 안 읽음.
+- `Deck.GetDrawPile()` — 미사용.
+- `SaveData.currentStage` — 저장만 하고 로드에서 안 읽음 (LayerManager 시절 잔재).
+- `Animation/` 폴더 전체 (CharacterAnimator + AnimationStateController + 직업별 4종) — 게임 코드 어디서도 호출 안 함. 스프라이트/연출 작업 때 쓸 예정이면 보류, 아니면 삭제.
+
+### C. 구조 개선 (아름답게 만들기 본론)
+
+- **카드 효과 적용 로직 중복** — `Deck.ApplyCardEffect`(전투)와 `MapCardSystem.ApplyEffect`(맵)가 시전자 효과 규칙을 복붙으로 공유. 한쪽을 고치면 다른 쪽을 까먹기 좋은 구조. 시전자 효과를 공용 메서드로 추출.
+- `Deck.ApplyCardEffect`의 `caster is PlayerCharacter attacker/pc/defender/pcs/buffer` — 같은 캐스팅을 5번 반복. 메서드 초입에서 한 번만.
+- **DungeonManager 책임 과다** (~400줄) — 이동/적 AI(BFS)/조우/보상/상점/성소/식사/세이브가 한 클래스에. 최소한 적 AI(`StepEnemies`/`StepTowardPlayer`/`BfsPath`/`TryStepEnemy`)를 별도 클래스(예: `EnemyAiSystem`)로 분리.
+- `DungeonManager.TryMove`의 휴식/상점/성소 분기 3개가 거의 동일 패턴 — `EnterRoom(room)` 하나로 합치기.
+- **`UIManager.ShowPanel/HideAll`** — 패널 9개를 switch + 수동 나열 2벌. 새 상태 추가마다 3곳 수정. `Dictionary<GameState, GameObject>` 또는 직렬화 배열로. + `RefreshBattle()`이 매 갱신마다 `GetComponentInChildren<BattleUI>()` — 캐싱.
+- **`usedOnceRelics`에 유물 id와 `"killed_0"` 처치 키가 섞여 있음** — 용도가 다른 두 상태를 한 HashSet에. 처치 추적은 별도 필드로 분리 (A-4 고칠 때 같이).
+- **이름 정리: mana → cost** — 7/9에 미뤄둔 것. 화면은 전부 "코스트"인데 코드는 `currentMana/maxMana/manaCost`. 전면 리네이밍은 한 번에 (세이브 필드명 `currentMana`는 JsonUtility 하위호환 주의 — 필드명 바꾸면 구세이브 깨짐).
+- `LootTable.RollCardRewards` — "최대 100회 재추첨으로 중복 회피" 방식. 뽑힌 항목을 풀 사본에서 제거하며 뽑으면 tries 꼼수 없이 명료해짐.
+- 로직 클래스(Character/Deck/Enemy/ShopSystem 등)가 `Debug.Log`로 게임 이벤트를 직접 출력 — 전투 로그 UI를 만들 때쯤 이벤트/콜백으로 분리해야 함. 지금은 유지해도 무방하나 인지.
+- MonoBehaviour에 `?.` 연산자 다용 (`UIManager.Instance?`, `panelRoot?.SetActive` 등) — Unity의 destroyed-fake-null을 `?.`가 못 거르는 유명한 함정. 현재 씬 구조(단일 씬, 파괴 없음)에선 무해해서 우선순위 낮음.
+
+### D. 사소 (여유 있으면)
+
+- `ShrineSystem.GenerateUtilityCard(player)` — player 파라미터 미사용.
+- `BattleUI.BuildManaPips` — 유물 GainMana로 currentMana가 maxMana를 넘으면 초과분이 표시 안 됨 (◆가 max개까지만).
+- `DungeonMapUI.RepaintGrid` — 타일마다 `floor.RoomAt(x,y)` 선형 탐색. 방 중심 좌표만 미리 Dictionary로 만들어두면 충분.
+- `ShopSystem.RollRandomFoods` — 같은 식료품 2개가 나올 수 있음 (의도면 유지).
+- `OnBattleWon`의 `foreach (… AliveEnemiesInRoom(…)) s.isDead = true` — 순회 중인 lazy enumerable의 필터 조건(isDead)을 순회 중에 바꿈. 현재는 동작하지만 깨지기 쉬운 패턴, `.ToList()` 한 번이면 안전.
+- 보스전 승리 → Victory 직행일 때도 `pendingReward`를 만들어둠 (안 쓰고 버려짐).
+
+---
+
+## 전체 코드 리뷰 반영 — "코드 아름답게" 일괄 수정 (2026-07-14)
+
+위 리뷰 목록(A/B/C/D)을 전부 처리. 오전에 이전 세션이 A-1(유물 트리거 분리)/A-6(인스턴스 기준 제거)을 시작해두고 끊겨서 `ShopUI→DungeonManager→ShopSystem` 시그니처가 안 맞아 **컴파일이 깨진 채로** 남아 있었음 — 그것부터 이어서 완성.
+
+### A. 버그 7건 전부 수정
+1. **세이브 유물 증발**: `RestorePlayer`가 유물을 먼저 복원하면서 `ApplyPassiveStats`(상시 스탯만)를 다시 적용 → 최대 HP/코스트/패 수가 저장 당시와 같아짐. OnAcquire(1회성 덱 조작)는 재실행 안 함. currentHp/currentCost는 그 뒤 복원(최대치 클램프). PlayerFactory 대신 `new PlayerCharacter()`로 생성 (스타터 덱/시작 식료품을 만들었다 버리는 낭비 제거).
+2. **집단전 타겟**: 인덱스 전달을 버리고 `BattleUI.selectedTarget`(Enemy 참조) + `UseCard(handIndex, Enemy target)`로 변경. 선택한 적이 죽으면 첫 생존 적으로 자동 리셋, 전투 시작 시 참조 초기화.
+3. **리필 틈 오발동**: 자동 턴종료 조건을 `card.cost > 0 && currentCost == 0`("이 카드로 소진된 경우")로 좁힘 — 0코스트 카드/맵에서 0으로 진입한 첫 턴은 이제 안 걸림.
+4. **OnKill/HP30 미발동**: 처치 감지를 `CheckNewKills()`로 분리, `rewardedKills`(HashSet\<Enemy\>)로 추적 — 카드 사용 직후 + 적 턴 상태이상 처리 직후 양쪽에서 호출 (독/화상 처치도 혈약 반지 발동). `CheckHpBelowTriggers`는 플레이어 HP가 깎이는 모든 경로(적 공격/자해/턴 시작 독화상) 뒤에 호출. `usedOnceRelics`에 섞여 있던 `killed_i` 키도 이걸로 분리 (C 항목).
+5. **자기 턴 중 사망**: 카드 사용 후 플레이어 사망이면 즉시 `Lose` (전멸 확인이 우선 — 동귀어진은 승리). 턴 시작 독/화상 사망도 처리. PlayerTurn 대기 조건을 `playerTurnEnded || state != PlayerTurn`으로 일반화.
+6. **카드 오제거**: `Deck.RemoveCard(Card)` 인스턴스 기준으로 통일하고 hand까지 검색. ShopUI→`DungeonManager.RemoveCardFromDeck(Card)`→ShopSystem 전 구간 참조 전달.
+7. **적 스폰 겹침**: `SpawnOne`이 방 안에서 다른 적이 없는 칸 목록 중에서 뽑음.
+
+### B. 죽은 코드 — 결정
+- **적별 골드 → 살림**: `OnBattleWon(List<Enemy>)`가 처치한 적별 `RollGoldReward()`를 합산 (정성껏 적어둔 EnemyDatabase 골드 데이터가 드디어 쓰임, 조우 난이도에 보상이 비례). 대신 `LootTable.RollGold`/`goldRange`를 삭제.
+- **Animation/ 폴더 → 보류**: 스프라이트/연출 작업 때 쓸 예정이라 유지.
+- **삭제**: `CalculateWithCrit`, `dexterityStack`(+`GetFinalBlockBonus`), `currentFloor`, `Card.rarity`/`classRestriction`/`CardRarity`, `EnemyData.baseBlock`(13종 초기화 포함), `Deck.GetDrawPile`/`HandCount`, `SaveData.currentStage`/`maxHp`/`dexterityStack`(+`Save`의 stage 파라미터), `LootTable.GetCardRewardCount`/`RewardType`/`RewardEntry.goldMin·goldMax`, `FoodDatabase.Exists`.
+
+### C. 구조 개선
+- **카드 효과 중복 제거**: 시전자 효과(방어막/회복/강인함/자해/예약버프)를 `Card.ApplyCasterEffects(caster)` 하나로 — `Deck.ApplyCardEffect`(전투)와 `MapCardSystem.UseCard`(맵)가 공유. 같은 캐스팅 5회 반복도 사라짐. 드로우만 덱 순환이 필요해 Deck에 남김.
+- **적 AI 분리**: `System/EnemyAiSystem.cs` 신규 — LOS 감지/BFS 추적/접촉 판정 이동, DungeonManager는 `EnemyAiSystem.StepAll(floor)` 한 줄만.
+- **방 이벤트 분기 통합**: `TryMove`의 휴식/상점/성소 3분기 → `TryEnterRoomEvent` switch 하나 + `EnterRoom`.
+- **UIManager**: switch+수동 나열 2벌 → `Dictionary<GameState, GameObject>` 1개, `RefreshBattle`의 매번 `GetComponentInChildren` → Awake 캐싱.
+- **mana → cost 전면 리네이밍** (7/9에 미뤄둔 것): `Card.cost`, `PlayerCharacter.currentCost/maxCost`, `PlayerData.maxCost`, `BattleManager.CurrentCost/costRefillPenalty`, `RelicEffectType.GainCost/BonusMaxCost`, UI 필드 `playerCostText`/`costText`. **세이브 JSON 키(`currentMana`, `CardSnapshot.manaCost`)만 하위호환 때문에 옛 이름 유지** (주석 명시). 카드 id/표시명(mana_shield 마력 방벽 등)은 세이브 호환+플레이버라 유지. `SceneSetup` 바인딩 문자열 갱신 + 씬 재생성으로 SerializeField 재연결 완료.
+- **LootTable 추첨**: "최대 100회 재추첨" → 뽑힌 항목을 풀 사본에서 제거하며 뽑기.
+- Debug.Log 이벤트 분리 / MonoBehaviour `?.` 정리는 리뷰 결론대로 보류 (현 구조에서 무해).
+
+### D. 사소
+- `GenerateUtilityCard` 미사용 파라미터 제거, `BuildCostPips`가 최대치 초과 코스트(전쟁의 뿔피리)도 표시, `DungeonMapUI` 방 중심 좌표 Dictionary 캐싱(타일마다 `RoomAt` 선형탐색 제거), 상점 식료품 중복 진열 방지, `OnBattleWon`의 lazy enumerable 순회 중 수정 → `.ToList()`, 최종보스 승리 시 `pendingReward` 생성 생략 + 매직넘버 3 → `FinalLayer` 상수.
+- **추가 발견 2건**: (1) 성장형 카드가 강해져도 설명 텍스트가 예전 수치로 남던 문제 → `Card.RebuildDescription()` 추가, 성장 시 갱신. (2) `KoreanFontBaker` 재실행 시 TMP Settings 폴백 교체 실패(에셋을 지웠다 다시 만드는 사이 참조가 null이라 못 찾음, GUID 재사용 운으로만 살아 있었음) → null 슬롯도 교체 대상으로 수정.
+
+### 검증 (Unity 6000.5.3f1 배치모드, 임시 테스트는 확인 후 삭제)
+- 컴파일 에러 0, `씬 자동 세팅` 재실행 성공, `한글 폰트 정적 베이크` 재실행 성공(499자).
+- 자동 테스트 통과: (1) 세이브/로드 라운드트립 — 철심/마왕의 왕관/뱀 어금니/정화의 부적 획득 후 저장→로드에서 스탯 복원 + 부적 재발동 없음 확인, (2) 맵 생성 600회 — 적 겹침 0/보스방 도달 가능, (3) 보상 추첨 600회 — 중복 0.
+- **플레이모드 전체 플레이스루**: 전사로 1계층 시작 → 마왕 처치(Victory)까지 자동 주행 완주, 예외 0건 (최종 골드 734/덱 34장/유물 6개 — 도중에 정화의 부적·혼돈의 프리즘 OnAcquire, 전쟁의 뿔피리 GainCost 경로 실제로 탐).
+
+### 주의 (세이브 호환)
+- 구버전 세이브 로드 가능. 단 maxHp는 이제 저장값 대신 "기본 스탯 + 유물 Passive"로 재계산된다 (그게 A-1 수정의 핵심).
+
+**다음에 이어서 할 것 (변동 없음)**
+- 4단계: 전투를 그리드 위로 통합해서 전투 중 이동/도주/키이팅.
+- 맵/마커 UI 다듬기 (7/8 "미해결 UI 피드백" 참고).
+- 실제 플레이 손맛 확인: 적별 골드 보상 체감, 집단전 타겟 클릭, 코스트 소진 자동 턴종료.
+
 > **게임이 완성됐으면 이 파일 삭제해라.**

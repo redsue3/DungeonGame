@@ -6,7 +6,7 @@ using TMPro;
 public class CardUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI cardNameText;
-    [SerializeField] private TextMeshProUGUI manaCostText;
+    [SerializeField] private TextMeshProUGUI costText;
     [SerializeField] private TextMeshProUGUI descText;
     [SerializeField] private TextMeshProUGUI typeTag;
     [SerializeField] private Image           cardBg;
@@ -22,7 +22,7 @@ public class CardUI : MonoBehaviour
     public void Setup(Card card)
     {
         cardNameText.text = card.cardName;
-        manaCostText.text = card.manaCost.ToString();
+        costText.text     = card.cost.ToString();
         descText.text     = card.description;
         typeTag.text      = card.cardType == CardType.Attack ? "공격"
                           : card.cardType == CardType.Defense ? "방어" : "스킬";

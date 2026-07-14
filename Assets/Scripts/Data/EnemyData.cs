@@ -6,7 +6,6 @@ public class EnemyData
     public string displayName;
     public int    hp;
     public int    baseAttack;
-    public int    baseBlock;
     public int    rewardGoldMin;
     public int    rewardGoldMax;
     public bool   isElite;

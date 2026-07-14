@@ -1,16 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum RewardType { Card, Gold, Relic }
-
-[System.Serializable]
+// 카드 드롭 풀의 한 항목. 골드는 처치한 적별 보상(EnemyData.rewardGold)으로,
+// 유물은 RollRelicDrop으로 따로 굴리므로 여기엔 카드만 들어간다.
 public class RewardEntry
 {
-    public RewardType type;
-    public string     id;
-    public int        weight;
-    public int        goldMin;
-    public int        goldMax;
+    public string id;
+    public int    weight;
 }
 
 public static class LootTable
@@ -19,16 +15,16 @@ public static class LootTable
     // (2026-07-05에 CardDatabase엔 추가됐지만 드롭 풀엔 연결 안 돼 있던 것 - 2026-07-08 연결)
     private static readonly List<RewardEntry> basicCardPool = new List<RewardEntry>
     {
-        new RewardEntry { type = RewardType.Card, id = "quick_slash",    weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "solid_strike",   weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "puncture",       weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "guard_up",       weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "steady_guard",   weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "counter_stance", weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "focus",          weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "adrenaline",     weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "second_wind",    weight = 4 },
-        new RewardEntry { type = RewardType.Card, id = "toughen",        weight = 4 },
+        new RewardEntry { id = "quick_slash",    weight = 4 },
+        new RewardEntry { id = "solid_strike",   weight = 4 },
+        new RewardEntry { id = "puncture",       weight = 4 },
+        new RewardEntry { id = "guard_up",       weight = 4 },
+        new RewardEntry { id = "steady_guard",   weight = 4 },
+        new RewardEntry { id = "counter_stance", weight = 4 },
+        new RewardEntry { id = "focus",          weight = 4 },
+        new RewardEntry { id = "adrenaline",     weight = 4 },
+        new RewardEntry { id = "second_wind",    weight = 4 },
+        new RewardEntry { id = "toughen",        weight = 4 },
     };
 
     private static readonly Dictionary<int, List<RewardEntry>> cardPool =
@@ -36,45 +32,36 @@ public static class LootTable
     {
         [1] = new List<RewardEntry>
         {
-            new RewardEntry { type = RewardType.Card, id = "heavy_strike",  weight = 10 },
-            new RewardEntry { type = RewardType.Card, id = "double_strike", weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "iron_defense",  weight = 10 },
-            new RewardEntry { type = RewardType.Card, id = "power_up",      weight = 6  },
-            new RewardEntry { type = RewardType.Card, id = "quick_draw",    weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "acid_slime",    weight = 5  },
-            new RewardEntry { type = RewardType.Card, id = "holy_blade",    weight = 6  },
+            new RewardEntry { id = "heavy_strike",  weight = 10 },
+            new RewardEntry { id = "double_strike", weight = 8  },
+            new RewardEntry { id = "iron_defense",  weight = 10 },
+            new RewardEntry { id = "power_up",      weight = 6  },
+            new RewardEntry { id = "quick_draw",    weight = 8  },
+            new RewardEntry { id = "acid_slime",    weight = 5  },
+            new RewardEntry { id = "holy_blade",    weight = 6  },
         },
 
         [2] = new List<RewardEntry>
         {
-            new RewardEntry { type = RewardType.Card, id = "whirlwind",    weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "poison_blade", weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "flame_burst",  weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "mana_surge",   weight = 6  },
-            new RewardEntry { type = RewardType.Card, id = "fortify",      weight = 7  },
-            new RewardEntry { type = RewardType.Card, id = "dark_pact",    weight = 5  },
-            new RewardEntry { type = RewardType.Card, id = "divine_shield",weight = 6  },
+            new RewardEntry { id = "whirlwind",     weight = 8 },
+            new RewardEntry { id = "poison_blade",  weight = 8 },
+            new RewardEntry { id = "flame_burst",   weight = 8 },
+            new RewardEntry { id = "mana_surge",    weight = 6 },
+            new RewardEntry { id = "fortify",       weight = 7 },
+            new RewardEntry { id = "dark_pact",     weight = 5 },
+            new RewardEntry { id = "divine_shield", weight = 6 },
         },
 
         [3] = new List<RewardEntry>
         {
-            new RewardEntry { type = RewardType.Card, id = "soul_slash",    weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "perfect_guard", weight = 8  },
-            new RewardEntry { type = RewardType.Card, id = "plague_strike", weight = 7  },
-            new RewardEntry { type = RewardType.Card, id = "soul_drain",    weight = 7  },
-            new RewardEntry { type = RewardType.Card, id = "chaos_flame",   weight = 5  },
-            new RewardEntry { type = RewardType.Card, id = "thunder_storm", weight = 6  },
-            new RewardEntry { type = RewardType.Card, id = "blessing",      weight = 6  },
+            new RewardEntry { id = "soul_slash",    weight = 8 },
+            new RewardEntry { id = "perfect_guard", weight = 8 },
+            new RewardEntry { id = "plague_strike", weight = 7 },
+            new RewardEntry { id = "soul_drain",    weight = 7 },
+            new RewardEntry { id = "chaos_flame",   weight = 5 },
+            new RewardEntry { id = "thunder_storm", weight = 6 },
+            new RewardEntry { id = "blessing",      weight = 6 },
         },
-    };
-
-    private static readonly Dictionary<int, (int min, int max)> goldRange =
-        new Dictionary<int, (int, int)>
-    {
-        [1] = (12, 20),
-        [2] = (20, 32),
-        [3] = (35, 52),
-        [4] = (50, 70),
     };
 
     private static readonly Dictionary<int, string[]> foodPool = new Dictionary<int, string[]>
@@ -84,7 +71,7 @@ public static class LootTable
         [3] = new[] { "dried_meat", "ration", "feast" },
     };
 
-    private const float FoodDropChance  = 0.5f;
+    private const float FoodDropChance   = 0.5f;
     private const float EliteRelicChance = 0.7f;
 
     static LootTable()
@@ -93,47 +80,32 @@ public static class LootTable
             pool.AddRange(basicCardPool);
     }
 
+    // 가중치 추첨. 뽑힌 항목은 풀 사본에서 제거해서 중복 없이 count장을 채운다.
     public static List<string> RollCardRewards(int layer, int count)
     {
         int resolvedLayer = Mathf.Clamp(layer, 1, cardPool.Count);
-        var pool   = cardPool[resolvedLayer];
+        var pool   = new List<RewardEntry>(cardPool[resolvedLayer]);
         var result = new List<string>();
-        var used   = new HashSet<string>();
 
-        int totalWeight = 0;
-        foreach (var e in pool) totalWeight += e.weight;
-
-        int tries = 0;
-        while (result.Count < count && tries < 100)
+        while (result.Count < count && pool.Count > 0)
         {
-            tries++;
+            int totalWeight = 0;
+            foreach (var entry in pool) totalWeight += entry.weight;
+
             int roll = Random.Range(0, totalWeight);
-            int acc  = 0;
-            foreach (var entry in pool)
+            for (int i = 0; i < pool.Count; i++)
             {
-                acc += entry.weight;
-                if (roll < acc)
+                roll -= pool[i].weight;
+                if (roll < 0)
                 {
-                    if (!used.Contains(entry.id))
-                    {
-                        result.Add(entry.id);
-                        used.Add(entry.id);
-                    }
+                    result.Add(pool[i].id);
+                    pool.RemoveAt(i);
                     break;
                 }
             }
         }
         return result;
     }
-
-    public static int RollGold(int layer)
-    {
-        int resolvedLayer = Mathf.Clamp(layer, 1, goldRange.Count);
-        var (min, max) = goldRange[resolvedLayer];
-        return Random.Range(min, max + 1);
-    }
-
-    public static int GetCardRewardCount(int layer) => 1 + layer;
 
     // 전투 승리 시 카드 보상과 별개로 식료품을 얻을 수도 있다 (없으면 null)
     public static string RollFoodDrop(int layer)

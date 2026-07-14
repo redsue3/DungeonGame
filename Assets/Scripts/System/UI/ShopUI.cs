@@ -113,7 +113,7 @@ public class ShopUI : MonoBehaviour
         List<Card> allCards = player.deck.GetAllCards();
         foreach (Card card in allCards)
         {
-            string cid = card.id;
+            Card captured = card; // 같은 id가 여러 장이어도 고른 그 카드(인스턴스)만 제거되도록 참조로 넘긴다
             GameObject obj = Instantiate(removeCardEntryPrefab, removeCardList);
             removeCardObjects.Add(obj);
 
@@ -124,7 +124,7 @@ public class ShopUI : MonoBehaviour
             if (btn != null)
                 btn.onClick.AddListener(() =>
                 {
-                    DungeonManager.Instance.RemoveCardFromDeck(cid);
+                    DungeonManager.Instance.RemoveCardFromDeck(captured);
                     removeCardPanel.SetActive(false);
                     removeCardMode = false;
                 });

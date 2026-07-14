@@ -7,23 +7,21 @@ public class PlayerCharacter : Character
     public CharacterClass characterClass;
 
     public int attackBonus;
-    public int maxMana;
+    public int maxCost;
     public int startHandSize;
 
     // 현재 코스트 - 전투/맵 공용으로 상주한다. 전투 2턴부터는 매 턴 풀 리필,
     // 맵에서는 카드 사용으로 소모하고 이동으로 회복 (MapCardSystem 담당).
-    public int currentMana;
+    public int currentCost;
     public int stepsSinceCostRegen;
 
     public int strengthStack;
-    public int dexterityStack;
 
     // 성소 유틸 카드의 '다음 카드 예약 보너스' - 해당 타입 카드를 실제로 낼 때 1회 소모됨
     public int pendingAttackBonus;
     public int pendingDefenseBonus;
 
     public int gold;
-    public int currentFloor;
 
     public int hunger    = HungerSystem.MaxHunger;
     public int maxHunger = HungerSystem.MaxHunger;
@@ -59,8 +57,8 @@ public class PlayerCharacter : Character
         characterName = data.displayName;
         maxHp         = data.maxHp;
         currentHp     = data.maxHp;
-        maxMana       = data.maxMana;
-        currentMana   = data.maxMana;
+        maxCost       = data.maxCost;
+        currentCost   = data.maxCost;
         startHandSize = data.startHandSize;
         attackBonus   = data.baseAttackBonus;
     }
@@ -72,8 +70,7 @@ public class PlayerCharacter : Character
         ProcessStatusEffects();
     }
 
-    public int GetFinalAttackBonus()  => attackBonus + strengthStack;
-    public int GetFinalBlockBonus()   => dexterityStack;
+    public int GetFinalAttackBonus() => attackBonus + strengthStack;
 
     public int ConsumePendingAttackBonus()
     {

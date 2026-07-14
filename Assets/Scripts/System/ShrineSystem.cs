@@ -20,7 +20,7 @@ public static class ShrineSystem
         return new[]
         {
             new ShrineOption { branch = ShrineBranch.Attack,  branchLabel = "공격", card = GenerateAttackCard(player) },
-            new ShrineOption { branch = ShrineBranch.Utility, branchLabel = "유틸", card = GenerateUtilityCard(player) },
+            new ShrineOption { branch = ShrineBranch.Utility, branchLabel = "유틸", card = GenerateUtilityCard() },
             new ShrineOption { branch = ShrineBranch.Defense, branchLabel = "방어", card = GenerateDefenseCard(player) },
         };
     }
@@ -44,7 +44,7 @@ public static class ShrineSystem
     }
 
     // 유틸 분기: 절반 확률로 "다음 공격 강화" 또는 "다음 방어 강화" (둘 다 0코스트)
-    private static Card GenerateUtilityCard(PlayerCharacter player)
+    private static Card GenerateUtilityCard()
     {
         int amount = Random.Range(3, 7);
         return Random.value < 0.5f

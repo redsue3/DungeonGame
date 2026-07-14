@@ -228,17 +228,25 @@ public static class FloorGenerator
         }
     }
 
+    // 방 안에서 다른 적이 없는 칸을 골라 배치한다 (집단 조우 2마리가 같은 타일에 겹치지 않게)
     private static void SpawnOne(DungeonFloor floor, RoomInfo room, string templateId, ref int nextId)
     {
-        int x = Random.Range(room.x, room.x + room.w);
-        int y = Random.Range(room.y, room.y + room.h);
+        var freeCells = new List<(int x, int y)>();
+        for (int x = room.x; x < room.x + room.w; x++)
+            for (int y = room.y; y < room.y + room.h; y++)
+                if (floor.EnemyAt(x, y) == null)
+                    freeCells.Add((x, y));
+
+        if (freeCells.Count == 0) return; // 방이 가득 참 (최소 방 크기 3×3 > 방당 최대 적 2마리라 실제로는 발생하지 않음)
+
+        var cell = freeCells[Random.Range(0, freeCells.Count)];
         floor.Enemies.Add(new EnemySpawn
         {
             id = nextId++,
             roomId = room.id,
             enemyTemplateId = templateId,
-            x = x,
-            y = y,
+            x = cell.x,
+            y = cell.y,
         });
     }
 

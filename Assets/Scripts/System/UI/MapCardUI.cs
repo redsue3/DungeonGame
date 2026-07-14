@@ -44,7 +44,7 @@ public class MapCardUI : MonoBehaviour
         var p = DungeonManager.Instance?.Player;
         if (p == null) return;
 
-        costText.text = $"코스트  {p.currentMana} / {p.maxMana}   (이동 {MapCardSystem.TilesPerCostRegen}칸마다 +1 회복)";
+        costText.text = $"코스트  {p.currentCost} / {p.maxCost}   (이동 {MapCardSystem.TilesPerCostRegen}칸마다 +1 회복)";
 
         foreach (var obj in cardObjects) Destroy(obj);
         cardObjects.Clear();
@@ -62,7 +62,7 @@ public class MapCardUI : MonoBehaviour
 
             var btn = obj.GetComponent<Button>();
             if (btn == null) continue;
-            btn.interactable = p.currentMana >= card.manaCost;
+            btn.interactable = p.currentCost >= card.cost;
 
             Card captured = card;
             btn.onClick.AddListener(() =>

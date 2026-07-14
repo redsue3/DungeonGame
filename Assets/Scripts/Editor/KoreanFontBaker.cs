@@ -112,8 +112,10 @@ public static class KoreanFontBaker
         for (int i = 0; i < list.arraySize; i++)
         {
             SerializedProperty elem = list.GetArrayElementAtIndex(i);
-            if (elem.objectReferenceValue != null &&
-                (elem.objectReferenceValue.name == "NotoSansKR SDF" || elem.objectReferenceValue.name == "NotoSansKR SDF Static"))
+            Object current = elem.objectReferenceValue;
+            // 재실행하면 이 메뉴가 기존 Static 에셋을 지웠다 다시 만들기 때문에, 그 사이 이 슬롯은
+            // 깨진 참조(null)로 보인다 - 그 슬롯도 우리 것으로 간주하고 새 에셋으로 교체한다.
+            if (current == null || current.name == "NotoSansKR SDF" || current.name == "NotoSansKR SDF Static")
             {
                 elem.objectReferenceValue = newAsset;
                 replaced = true;
