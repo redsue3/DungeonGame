@@ -17,6 +17,15 @@ public class EnemyAction
     }
 }
 
+// 보스의 페이즈 하나 - 자기 패턴과 자기 진행 인덱스를 따로 들고 있어서,
+// 페이즈가 바뀌면 새 패턴을 처음부터 다시 돈다.
+public class EnemyPhase
+{
+    public float  hpThreshold;
+    public string transitionMessage;
+    public List<EnemyAction> pattern = new List<EnemyAction>();
+}
+
 public class Enemy : Character
 {
     public int  rewardGoldMin;
@@ -24,7 +33,8 @@ public class Enemy : Character
     public bool isElite;
     public bool isBoss;
 
-    private List<EnemyAction> pattern = new List<EnemyAction>();
+    private List<EnemyPhase> phases = new List<EnemyPhase>();
+    private int currentPhaseIndex = 0;
     private int patternIndex = 0;
 
     public Enemy(string name, int hp, int baseAtk, int goldMin, int goldMax)
@@ -34,13 +44,15 @@ public class Enemy : Character
         rewardGoldMax = goldMax;
     }
 
-    public void AddAction(EnemyAction action) => pattern.Add(action);
+    public void AddPhase(EnemyPhase phase) => phases.Add(phase);
 
-    public EnemyAction PeekNextAction() => pattern[patternIndex % pattern.Count];
+    private EnemyPhase CurrentPhase => phases[currentPhaseIndex];
+
+    public EnemyAction PeekNextAction() => CurrentPhase.pattern[patternIndex % CurrentPhase.pattern.Count];
 
     public EnemyAction GetNextAction()
     {
-        EnemyAction action = pattern[patternIndex % pattern.Count];
+        EnemyAction action = CurrentPhase.pattern[patternIndex % CurrentPhase.pattern.Count];
         patternIndex++;
         return action;
     }
@@ -48,6 +60,21 @@ public class Enemy : Character
     public void OnTurnStart()
     {
         ProcessStatusEffects();
+        CheckPhaseTransition();
+    }
+
+    // HP 비율이 다음 페이즈의 진입 조건 이하로 떨어졌으면 전환한다 (역행 없음 - 회복해도 이전 페이즈로 안 돌아감).
+    // 한 턴에 여러 단계를 건너뛸 수도 있고(while), 페이즈가 바뀔 때마다 패턴 인덱스를 0으로 리셋해서 새 패턴을 처음부터 돈다.
+    private void CheckPhaseTransition()
+    {
+        while (currentPhaseIndex + 1 < phases.Count &&
+               (float)currentHp / maxHp <= phases[currentPhaseIndex + 1].hpThreshold)
+        {
+            currentPhaseIndex++;
+            patternIndex = 0;
+            if (!string.IsNullOrEmpty(CurrentPhase.transitionMessage))
+                Debug.Log($"[페이즈 전환] {characterName}: {CurrentPhase.transitionMessage}");
+        }
     }
 
     public void ExecuteAction(EnemyAction action, PlayerCharacter target)
