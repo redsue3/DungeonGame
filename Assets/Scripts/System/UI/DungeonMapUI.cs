@@ -223,8 +223,10 @@ public class DungeonMapUI : MonoBehaviour
                 lbl.text  = "";
             }
 
-            bool isAdjacent = System.Math.Abs(x - px) + System.Math.Abs(y - py) == 1 ||
-                               (System.Math.Abs(x - px) == 1 && System.Math.Abs(y - py) == 1);
+            // 4방향(상하좌우)만 인접으로 인정한다. 대각선까지 허용하면 벽 모서리를 가로질러
+            // 이동할 수 있게 되는데, 적 추적 BFS(EnemyAiSystem.BfsPath)와 키보드 이동은 둘 다
+            // 4방향뿐이라 클릭 이동만 대각선을 허용하면 적이 절대 따라올 수 없는 경로로 도주가 가능해진다.
+            bool isAdjacent = System.Math.Abs(x - px) + System.Math.Abs(y - py) == 1;
             btn.interactable = visible && isAdjacent;
             btn.onClick.RemoveAllListeners();
             if (btn.interactable)
