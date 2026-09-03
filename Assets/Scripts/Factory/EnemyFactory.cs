@@ -9,13 +9,17 @@ public static class EnemyFactory
         var enemy = new Enemy(data.displayName, data.hp, data.baseAttack,
                               data.rewardGoldMin, data.rewardGoldMax);
 
-        foreach (var actionData in data.pattern)
+        foreach (var phaseData in data.phases)
         {
-            enemy.AddAction(new EnemyAction(
-                actionData.intent,
-                actionData.value,
-                actionData.description
-            ));
+            var phase = new EnemyPhase
+            {
+                hpThreshold       = phaseData.hpThreshold,
+                transitionMessage = phaseData.transitionMessage,
+            };
+            foreach (var actionData in phaseData.pattern)
+                phase.pattern.Add(new EnemyAction(actionData.intent, actionData.value, actionData.description));
+
+            enemy.AddPhase(phase);
         }
 
         enemy.isElite = data.isElite;
