@@ -65,6 +65,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\System\UI\InventoryUI.cs" />
+    <Compile Include="Assets\Scripts\System\UI\CardTabUI.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextEventHandler.cs" />
     <Compile Include="Assets\Scripts\System\ShrineSystem.cs" />
     <Compile Include="Assets\Scripts\System\RelicData.cs" />
@@ -144,6 +145,7 @@
     <Compile Include="Assets\Scripts\Database\RelicDatabase.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ShaderPropAnimator.cs" />
     <Compile Include="Assets\Scripts\Data\FoodData.cs" />
+    <Compile Include="Assets\Scripts\System\ExplorationCostSystem.cs" />
     <Compile Include="Assets\Scripts\Database\LootTable.cs" />
     <Compile Include="Assets\Scripts\Deck.cs" />
     <Compile Include="Assets\Scripts\Animation\Warrior\WarriorAnimator.cs" />

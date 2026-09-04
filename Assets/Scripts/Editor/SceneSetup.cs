@@ -66,7 +66,7 @@ public static class SceneSetup
 
         // ── 패널 ──
         GameObject characterSelectPanel = BuildCharacterSelectPanel(canvasGO.transform);
-        GameObject dungeonMapPanel      = BuildDungeonMapPanel(canvasGO.transform, tilePrefab, foodItemPrefab);
+        GameObject dungeonMapPanel      = BuildDungeonMapPanel(canvasGO.transform, tilePrefab, foodItemPrefab, cardPrefab);
         GameObject battlePanel          = BuildBattlePanel(canvasGO.transform, cardPrefab, enemyPanelPrefab);
         GameObject rewardPanel          = BuildRewardPanel(canvasGO.transform, cardPrefab);
         GameObject restPanel            = BuildRestPanel(canvasGO.transform);
@@ -335,7 +335,7 @@ public static class SceneSetup
         return panel;
     }
 
-    private static GameObject BuildDungeonMapPanel(Transform canvas, GameObject tilePrefab, GameObject foodItemPrefab)
+    private static GameObject BuildDungeonMapPanel(Transform canvas, GameObject tilePrefab, GameObject foodItemPrefab, GameObject cardPrefab)
     {
         GameObject panel = FullPanel("DungeonMapPanel", canvas, PanelBg);
 
@@ -350,11 +350,15 @@ public static class SceneSetup
         var layerText       = TextLine(topBar.transform, "LayerText", "1계층", 22, TextWhite, 32, 120);
         var playerHpText     = TextLine(topBar.transform, "PlayerHp", "HP 80/80", 20, TextWhite, 32, 150);
         var playerHungerText = TextLine(topBar.transform, "PlayerHunger", "배고픔 100/100", 20, new Color(0.8f, 0.9f, 0.4f), 32, 190);
+        var playerCostText   = TextLine(topBar.transform, "PlayerCost", "탐사 코스트 3/3", 20, new Color(0.5f, 0.75f, 1f), 32, 190);
         var playerGoldText   = TextLine(topBar.transform, "PlayerGold", "골드 0", 20, new Color(1f, 0.85f, 0.3f), 32, 130);
         var playerRelicsText = TextLine(topBar.transform, "PlayerRelics", "유물 없음", 16, TextDim, 32, 380);
 
         var inventoryBtn = Btn(topBar.transform, "InventoryBtn", "인벤토리", BtnYellow, out _);
         inventoryBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 150;
+
+        var cardTabBtn = Btn(topBar.transform, "CardTabBtn", "카드", BtnBlue, out _);
+        cardTabBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 120;
 
         // 분기형 맵은 레이아웃 그룹 없이 DungeonMapUI가 층(floor)/가로위치(x) 기준으로
         // 노드와 연결선을 직접 배치한다 (그리드로 고정하지 않음).
@@ -369,10 +373,15 @@ public static class SceneSetup
         Bind(ui, "playerGoldText", playerGoldText);
         Bind(ui, "playerRelicsText", playerRelicsText);
         Bind(ui, "playerHungerText", playerHungerText);
+        Bind(ui, "playerCostText", playerCostText);
         Bind(ui, "inventoryBtn", inventoryBtn);
+        Bind(ui, "cardTabBtn", cardTabBtn);
 
         GameObject invPanel = BuildInventorySubPanel(panel.transform, foodItemPrefab);
         Bind(ui, "inventoryUI", invPanel.GetComponent<InventoryUI>());
+
+        GameObject cardTabPanel = BuildCardTabSubPanel(panel.transform, cardPrefab);
+        Bind(ui, "cardTabUI", cardTabPanel.GetComponent<CardTabUI>());
 
         return panel;
     }
@@ -417,6 +426,48 @@ public static class SceneSetup
         Bind(ui, "hungerBarFill", hungerFill);
         Bind(ui, "itemParent", listArea.transform);
         Bind(ui, "itemPrefab", foodItemPrefab);
+        Bind(ui, "panelRoot", root);
+        Bind(ui, "closeBtn", closeBtn);
+
+        root.SetActive(false);
+        return root;
+    }
+
+    private static GameObject BuildCardTabSubPanel(Transform mapPanel, GameObject cardPrefab)
+    {
+        GameObject root = NewGO("CardTabOverlay", mapPanel);
+        StretchFull(root.GetComponent<RectTransform>());
+        root.AddComponent<Image>().color = new Color(0, 0, 0, 0.7f);
+
+        GameObject box = NewGO("Box", root.transform);
+        Anchor(box.GetComponent<RectTransform>(), new Vector2(0.15f, 0.1f), new Vector2(0.85f, 0.9f), Vector2.zero, Vector2.zero);
+        box.AddComponent<Image>().color = PanelBg;
+
+        var title = Text(box.transform, "Title", "카드 - 맵에서 사용", 28, TextAlignmentOptions.Center, TextWhite);
+        Anchor(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -60), new Vector2(0, -14));
+
+        var costText = Text(box.transform, "CostText", "탐사 코스트 3/3", 18, TextAlignmentOptions.Center, new Color(0.5f, 0.75f, 1f));
+        Anchor(costText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -92), new Vector2(0, -68));
+
+        var ambushText = Text(box.transform, "AmbushText", "기습 예약 없음", 16, TextAlignmentOptions.Center, TextDim);
+        Anchor(ambushText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -118), new Vector2(0, -94));
+
+        GameObject listArea = NewGO("CardList", box.transform);
+        Anchor(listArea.GetComponent<RectTransform>(), new Vector2(0.05f, 0.12f), new Vector2(0.95f, 0.78f), Vector2.zero, Vector2.zero);
+        var grid = listArea.AddComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(200, 280);
+        grid.spacing = new Vector2(10, 10);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = 4;
+
+        var closeBtn = Btn(box.transform, "CloseBtn", "닫기", BtnRed, out _);
+        Anchor(closeBtn.GetComponent<RectTransform>(), new Vector2(0.35f, 0.02f), new Vector2(0.65f, 0.1f), Vector2.zero, Vector2.zero);
+
+        var ui = root.AddComponent<CardTabUI>();
+        Bind(ui, "costText", costText);
+        Bind(ui, "ambushText", ambushText);
+        Bind(ui, "cardParent", listArea.transform);
+        Bind(ui, "cardPrefab", cardPrefab);
         Bind(ui, "panelRoot", root);
         Bind(ui, "closeBtn", closeBtn);
 

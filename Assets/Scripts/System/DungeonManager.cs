@@ -61,6 +61,7 @@ public class DungeonManager : MonoBehaviour
         CurrentFloor.RevealAround(nx, ny, FloorGenerator.VisionRadius);
 
         HungerSystem.OnPlayerMove(Player);
+        ExplorationCostSystem.OnPlayerMove(Player);
         if (!Player.IsAlive)
         {
             TransitionTo(GameState.GameOver);
@@ -162,6 +163,63 @@ public class DungeonManager : MonoBehaviour
         e.y = ny;
         return true;
     }
+
+    private const int HiddenWallGoldMin = 30;
+    private const int HiddenWallGoldMax = 60;
+
+    // 맵 탐색 중 비공격 카드 사용 - UI(카드 탭)에서 호출. 탐사 코스트만 소모하고 덱 순환(드로우/버림)은 하지 않는다.
+    // 회복/자해 카드는 목록에서 제외(회복은 휴식/식료품과 역할이 겹쳐 게임이 쉬워지고, 자해는 맵에서 얻는 이득이 없어 페널티만 남음).
+    // 힘 같은 영구 효과는 즉시 적용되고, 방어막/다음 카드 예약 버프처럼 전투 중에만 의미 있는 효과는
+    // 바로 적용되지 않고 '기습'으로 저장돼서 다음 전투 시작 시 1회 발동한다 (직전에 쓴 카드 1장만 유지, 계속 덮어씀).
+    public bool UseCardOnMap(string cardId)
+    {
+        if (CurrentState != GameState.DungeonMap) return false;
+
+        Card card = Player.deck.GetAllCards().Find(c => IsMapUsable(c) && c.id == cardId);
+        if (card == null) return false;
+        if (Player.explorationCost < card.manaCost) return false;
+
+        Player.explorationCost -= card.manaCost;
+        if (card.strengthGain > 0) Player.strengthStack += card.strengthGain;
+        Player.SetAmbush(card);
+
+        Debug.Log($"[DungeonManager] [{card.cardName}] 맵에서 사용 (코스트 -{card.manaCost}) → 기습 예약");
+        return true;
+    }
+
+    // 인접한 부서지는 벽 파괴 - 맵 UI에서 부서지는 벽 타일 클릭 시 호출. 덱에서 감당 가능한 가장 싼 공격 카드를 자동으로 소모한다.
+    public bool TryBreakWall(int dx, int dy)
+    {
+        if (CurrentState != GameState.DungeonMap) return false;
+
+        int wx = CurrentFloor.PlayerX + dx, wy = CurrentFloor.PlayerY + dy;
+        if (!CurrentFloor.InBounds(wx, wy) || CurrentFloor.Tiles[wx, wy] != TileKind.BreakableWall) return false;
+
+        Card card = Player.deck.GetAllCards()
+            .Where(c => IsWallBreaker(c) && c.manaCost <= Player.explorationCost)
+            .OrderBy(c => c.manaCost)
+            .FirstOrDefault();
+        if (card == null) return false;
+
+        Player.explorationCost -= card.manaCost;
+        CurrentFloor.BreakWall(wx, wy);
+        CurrentFloor.RevealAround(CurrentFloor.PlayerX, CurrentFloor.PlayerY, FloorGenerator.VisionRadius);
+
+        int gold = Random.Range(HiddenWallGoldMin, HiddenWallGoldMax + 1);
+        Player.gold += gold;
+        Debug.Log($"[DungeonManager] [{card.cardName}]로 숨겨진 벽 파괴! 골드 +{gold}");
+
+        SaveSystem.Save(Player, currentLayer);
+        return true;
+    }
+
+    // 맵에서 직접 쓸 수 있는 카드 - 공격 카드(벽 파괴 전용)와 회복/자해 카드는 제외.
+    private static bool IsMapUsable(Card c) => c.cardType != CardType.Attack && c.healAmount <= 0 && c.selfDamage <= 0;
+
+    private static bool IsWallBreaker(Card c) => c.cardType == CardType.Attack;
+
+    // 카드 탭 UI에서 목록 표시용으로 호출
+    public List<Card> GetMapUsableCards() => Player.deck.GetAllCards().FindAll(IsMapUsable);
 
     // BattleManager에서 호출
     public void OnBattleWon()

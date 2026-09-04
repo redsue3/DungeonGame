@@ -65,6 +65,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\Editor\SceneSetup.cs" />
+    <Compile Include="Assets\Scripts\Editor\TempSmokeTest_MapCards.cs" />
     <Compile Include="Assets\Scripts\Editor\KoreanFontBaker.cs" />
   </ItemGroup>
   <ItemGroup>

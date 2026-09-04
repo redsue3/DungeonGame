@@ -16,6 +16,8 @@ public class SaveData
     public int   dexterityStack;
     public int   hunger;
     public int   maxHunger;
+    public int   explorationCost;
+    public int   maxExplorationCost;
     public CardSnapshot[] deckCards;
     public string[] relicIds;
     public string[] foodIds;
@@ -65,6 +67,8 @@ public static class SaveSystem
             dexterityStack = player.dexterityStack,
             hunger         = player.hunger,
             maxHunger      = player.maxHunger,
+            explorationCost    = player.explorationCost,
+            maxExplorationCost = player.maxExplorationCost,
             deckCards      = ExtractDeckSnapshots(player.deck),
             relicIds       = player.relics.GetAll().ToArray(),
             foodIds        = ExtractFoodIds(player.inventory),
@@ -101,6 +105,12 @@ public static class SaveSystem
         player.dexterityStack= data.dexterityStack;
         player.hunger        = data.maxHunger > 0 ? data.hunger    : HungerSystem.MaxHunger;
         player.maxHunger      = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
+        // 구버전 세이브(탐사 코스트 필드 없음) 호환 - maxExplorationCost가 0이면 PlayerFactory.Create가 이미 채워둔 기본값(가득 찬 상태)을 그대로 둔다.
+        if (data.maxExplorationCost > 0)
+        {
+            player.explorationCost    = data.explorationCost;
+            player.maxExplorationCost = data.maxExplorationCost;
+        }
 
         // 덱 복원 - CardDatabase에 등록된 카드는 최신 밸런스로, 성소 카드처럼
         // 등록되지 않은 카드는 저장된 스냅샷 그대로 복원한다.

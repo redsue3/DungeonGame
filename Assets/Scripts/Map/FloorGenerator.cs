@@ -18,6 +18,11 @@ public static class FloorGenerator
     private const int PlacementAttempts = 400;
     private const int ExtraEdges  = 3; // MST 위에 추가로 이어서 루프를 만드는 간선 수
 
+    private const int HiddenAlcoveCount    = 2;   // 층당 숨겨진 벽(부서지는 벽) 개수
+    private const int HiddenAlcoveAttempts = 600;
+
+    private static readonly (int dx, int dy)[] FourDirs = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+
     public static DungeonFloor Generate(int layer)
     {
         var floor = new DungeonFloor(layer, Width, Height);
@@ -25,6 +30,7 @@ public static class FloorGenerator
         PlaceRooms(floor);
         ConnectRooms(floor);
         CarveRooms(floor);
+        PlaceHiddenAlcoves(floor);
 
         RoomInfo start = floor.Rooms[0];
         RoomInfo boss  = PickBossRoom(floor.Rooms, start);
@@ -155,6 +161,53 @@ public static class FloorGenerator
             for (int x = room.x; x < room.x + room.w; x++)
                 for (int y = room.y; y < room.y + room.h; y++)
                     floor.Tiles[x, y] = TileKind.Floor;
+    }
+
+    // ─────────────────────────────────────────
+    // 숨겨진 벽(부서지는 벽) 배치 - 기존 벽 한 칸이 바닥과 정확히 한 면만 맞닿아 있고,
+    // 그 반대편 한 칸이 사방이 전부 벽으로 막힌 고립된 칸일 때만 후보로 삼는다.
+    // 그 벽을 BreakableWall로, 반대편 고립 칸을 Floor(숨겨진 알코브)로 바꿔서
+    // 공격 카드로 벽을 부숴야만 들어갈 수 있는 작은 보너스 공간을 만든다.
+    // ─────────────────────────────────────────
+    private static void PlaceHiddenAlcoves(DungeonFloor floor)
+    {
+        int placed  = 0;
+        int attempts = HiddenAlcoveAttempts;
+
+        while (placed < HiddenAlcoveCount && attempts-- > 0)
+        {
+            int x = Random.Range(2, floor.Width - 2);
+            int y = Random.Range(2, floor.Height - 2);
+            if (floor.Tiles[x, y] != TileKind.Wall) continue;
+
+            foreach (var (dx, dy) in FourDirs)
+            {
+                int fx = x - dx, fy = y - dy; // 바닥 쪽
+                int ax = x + dx, ay = y + dy; // 알코브가 될 칸
+
+                if (!floor.InBounds(fx, fy) || !floor.InBounds(ax, ay)) continue;
+                if (floor.Tiles[fx, fy] != TileKind.Floor) continue;
+                if (floor.Tiles[ax, ay] != TileKind.Wall) continue;
+                if (!IsIsolatedWall(floor, ax, ay, exclude: (x, y))) continue;
+
+                floor.Tiles[x, y]   = TileKind.BreakableWall;
+                floor.Tiles[ax, ay] = TileKind.Floor;
+                placed++;
+                break;
+            }
+        }
+    }
+
+    // 알코브 후보 칸 주변(부서질 벽 제외)이 전부 벽이어야 다른 통로/방과 우연히 이어지지 않는다.
+    private static bool IsIsolatedWall(DungeonFloor floor, int x, int y, (int x, int y) exclude)
+    {
+        foreach (var (dx, dy) in FourDirs)
+        {
+            int nx = x + dx, ny = y + dy;
+            if (nx == exclude.x && ny == exclude.y) continue;
+            if (!floor.InBounds(nx, ny) || floor.Tiles[nx, ny] != TileKind.Wall) return false;
+        }
+        return true;
     }
 
     // 시작방에서 가장 먼 방을 보스방으로 삼는다 (그리드는 층 개념이 없어져서, 거리로 "가장 깊은 곳"을 대신함).

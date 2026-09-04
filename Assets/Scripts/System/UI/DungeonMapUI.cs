@@ -18,10 +18,15 @@ public class DungeonMapUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI playerGoldText;
     [SerializeField] private TextMeshProUGUI playerRelicsText;
     [SerializeField] private TextMeshProUGUI playerHungerText;
+    [SerializeField] private TextMeshProUGUI playerCostText;
 
     [Header("인벤토리")]
     [SerializeField] private InventoryUI inventoryUI;
     [SerializeField] private Button      inventoryBtn;
+
+    [Header("카드 탭")]
+    [SerializeField] private CardTabUI cardTabUI;
+    [SerializeField] private Button    cardTabBtn;
 
     private const float MinTileSize = 14f;
     private const float MaxTileSize = 48f;
@@ -58,6 +63,8 @@ public class DungeonMapUI : MonoBehaviour
     private static readonly Color PlayerColor        = new Color(0.2f, 0.6f, 1f);
     private static readonly Color EnemyIdleColor     = new Color(0.6f, 0.55f, 0.2f);
     private static readonly Color EnemyChaseColor    = new Color(1f, 0.25f, 0.2f);
+    private static readonly Color BreakableWallColor    = new Color(0.55f, 0.4f, 0.25f); // 균열 - 일반 벽(안 보임)과 다르게 실체로 표시
+    private static readonly Color BreakableWallDimColor = new Color(0.28f, 0.2f, 0.13f);
 
     private DungeonFloor lastFloor;
     private readonly Dictionary<(int, int), GameObject> floorTileObjects = new Dictionary<(int, int), GameObject>();
@@ -68,12 +75,14 @@ public class DungeonMapUI : MonoBehaviour
     {
         TileSize = PlayerPrefs.GetFloat(TileSizePrefKey, DefaultTileSize);
         inventoryBtn?.onClick.AddListener(() => inventoryUI?.Open());
+        cardTabBtn?.onClick.AddListener(() => cardTabUI?.Open());
         Refresh();
     }
 
     void OnDisable()
     {
         inventoryBtn?.onClick.RemoveAllListeners();
+        cardTabBtn?.onClick.RemoveAllListeners();
     }
 
     void Update()
@@ -104,6 +113,11 @@ public class DungeonMapUI : MonoBehaviour
         if (DungeonManager.Instance.TryMove(dx, dy)) Refresh();
     }
 
+    private void BreakWall(int dx, int dy)
+    {
+        if (DungeonManager.Instance.TryBreakWall(dx, dy)) Refresh();
+    }
+
     public void Refresh()
     {
         DungeonFloor floor = DungeonManager.Instance?.CurrentFloor;
@@ -130,6 +144,8 @@ public class DungeonMapUI : MonoBehaviour
         playerGoldText.text  = $"골드  {p.gold}";
         if (playerHungerText != null)
             playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " (위험!)" : "");
+        if (playerCostText != null)
+            playerCostText.text = $"탐사 코스트  {p.explorationCost} / {p.maxExplorationCost}";
 
         var relicNames = new System.Text.StringBuilder();
         foreach (string id in p.relics.GetAll())
@@ -153,7 +169,8 @@ public class DungeonMapUI : MonoBehaviour
         {
             for (int y = 0; y < floor.Height; y++)
             {
-                if (floor.Tiles[x, y] != TileKind.Floor) continue;
+                // 일반 벽(TileKind.Wall)은 예전처럼 빈 공간으로 남긴다. 부서지는 벽은 실체로 표시해서 일반 벽과 구분한다.
+                if (floor.Tiles[x, y] != TileKind.Floor && floor.Tiles[x, y] != TileKind.BreakableWall) continue;
 
                 GameObject obj = Instantiate(tilePrefab, gridParent);
                 var rt = (RectTransform)obj.transform;
@@ -195,11 +212,17 @@ public class DungeonMapUI : MonoBehaviour
             var lbl = obj.GetComponentInChildren<TextMeshProUGUI>();
             var btn = obj.GetComponent<Button>();
 
+            bool isBreakableWall = floor.Tiles[x, y] == TileKind.BreakableWall;
             RoomInfo room = floor.RoomAt(x, y);
-            bool showRoomIcon = room != null && !room.isCleared && room.CenterX == x && room.CenterY == y
+            bool showRoomIcon = !isBreakableWall && room != null && !room.isCleared && room.CenterX == x && room.CenterY == y
                                  && roomIcon.TryGetValue(room.roomType, out string icon);
 
-            if (showRoomIcon)
+            if (isBreakableWall)
+            {
+                img.color = visible ? BreakableWallColor : BreakableWallDimColor;
+                lbl.text  = "균열";
+            }
+            else if (showRoomIcon)
             {
                 img.color = visible ? roomColor[room.roomType] : roomColor[room.roomType] * new Color(0.5f, 0.5f, 0.5f, 1f);
                 lbl.text  = roomIcon[room.roomType];
@@ -217,7 +240,10 @@ public class DungeonMapUI : MonoBehaviour
             if (btn.interactable)
             {
                 int ddx = x - px, ddy = y - py;
-                btn.onClick.AddListener(() => Move(ddx, ddy));
+                if (isBreakableWall)
+                    btn.onClick.AddListener(() => BreakWall(ddx, ddy));
+                else
+                    btn.onClick.AddListener(() => Move(ddx, ddy));
             }
         }
 

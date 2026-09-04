@@ -14,6 +14,7 @@ public class BattleManager : MonoBehaviour
     private int              manaRefillPenalty; // 코스트 소진으로 턴이 자동 종료됐을 때, 다음 턴 리필량에서 깎이는 "리필 틈" 페널티
     private BattleState      state;
     private HashSet<string>  usedOnceRelics = new HashSet<string>();
+    private Card              ambushToApply; // 맵에서 예약해둔 기습 카드 - 첫 플레이어 턴 시작 시 1회만 적용
 
     private const int ManaDrainPenalty = 1;
 
@@ -30,6 +31,7 @@ public class BattleManager : MonoBehaviour
         enemies = new List<Enemy>(enemyList);
         usedOnceRelics.Clear();
         manaRefillPenalty = 0;
+        ambushToApply = player.ConsumeAmbush();
         player.deck.ResetForBattle();
         HungerSystem.OnBattleStart(player);
         ApplyRelicTrigger(RelicTrigger.OnBattleStart);
@@ -63,6 +65,12 @@ public class BattleManager : MonoBehaviour
         playerTurnEnded = false;
         player.OnTurnStart();
 
+        if (ambushToApply != null)
+        {
+            ApplyAmbush(ambushToApply);
+            ambushToApply = null;
+        }
+
         int penalty = manaRefillPenalty;
         manaRefillPenalty = 0;
         currentMana = Mathf.Max(0, player.maxMana - penalty);
@@ -82,6 +90,15 @@ public class BattleManager : MonoBehaviour
 
         // UI에서 EndPlayerTurn() 호출 때까지 대기
         yield return new WaitUntil(() => playerTurnEnded || state == BattleState.Win);
+    }
+
+    // 맵에서 예약해둔 기습 카드 효과 적용 - 방어막/다음 카드 예약 버프만 적용(회복/자해는 애초에 맵에서 예약 불가, 힘은 맵에서 이미 즉시 적용됨)
+    private void ApplyAmbush(Card card)
+    {
+        if (card.block > 0) player.AddBlock(card.block + player.GetFinalBlockBonus());
+        if (card.buffNextAttack > 0)  player.pendingAttackBonus  += card.buffNextAttack;
+        if (card.buffNextDefense > 0) player.pendingDefenseBonus += card.buffNextDefense;
+        Debug.Log($"[기습] 맵에서 준비한 [{card.cardName}] 효과 발동!");
     }
 
     private void NotifyUI() => UIManager.Instance?.RefreshBattle();

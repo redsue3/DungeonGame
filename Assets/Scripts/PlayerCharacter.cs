@@ -17,6 +17,14 @@ public class PlayerCharacter : Character
     public int pendingAttackBonus;
     public int pendingDefenseBonus;
 
+    // 탐사 코스트 - 맵 탐색 중 카드 사용에 쓰는 자원, 전투용 currentMana(BattleManager)와 완전히 별개.
+    public int explorationCost;
+    public int maxExplorationCost;
+    public int stepsSinceCostRegen;
+
+    // 맵에서 마지막으로 사용한 비공격 카드 - '기습' 1회로 다음 전투 시작 시 적용되고 사라짐 (직전 1장만 유지)
+    public Card pendingAmbushCard;
+
     public int gold;
     public int currentFloor;
 
@@ -57,6 +65,9 @@ public class PlayerCharacter : Character
         maxMana       = data.maxMana;
         startHandSize = data.startHandSize;
         attackBonus   = data.baseAttackBonus;
+
+        maxExplorationCost = data.maxMana;
+        explorationCost     = maxExplorationCost;
     }
 
     public void OnTurnStart()
@@ -80,5 +91,16 @@ public class PlayerCharacter : Character
         int value = pendingDefenseBonus;
         pendingDefenseBonus = 0;
         return value;
+    }
+
+    // 맵에서 카드를 쓸 때마다 호출 - 직전에 쓴 카드로 덮어써서 항상 최근 1장만 기억한다.
+    public void SetAmbush(Card card) => pendingAmbushCard = card;
+
+    // 전투 시작 시 BattleManager에서 1회 소모
+    public Card ConsumeAmbush()
+    {
+        Card card = pendingAmbushCard;
+        pendingAmbushCard = null;
+        return card;
     }
 }

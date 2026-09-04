@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-public enum TileKind { Wall, Floor }
+public enum TileKind { Wall, Floor, BreakableWall } // BreakableWall: 겉보기엔 벽이지만 공격 카드로 타격하면 부서져 Floor가 됨
 public enum EnemyAiState { Idle, Chasing }
 
 // 방 하나 - 사각형 영역 + 조우 타입(TileType 재사용: Empty=시작방/평범한 통로, NormalEnemy/GroupEnemy/EliteEnemy/Boss/Rest/Shop/Shrine).
@@ -59,6 +59,13 @@ public class DungeonFloor
     public bool InBounds(int x, int y) => x >= 0 && x < Width && y >= 0 && y < Height;
 
     public bool IsWalkable(int x, int y) => InBounds(x, y) && Tiles[x, y] == TileKind.Floor;
+
+    // 인접한 부서지는 벽을 공격 카드로 타격했을 때 DungeonManager에서 호출 - 이미 부서졌거나 애초에 부서지는 벽이 아니면 무시.
+    public void BreakWall(int x, int y)
+    {
+        if (InBounds(x, y) && Tiles[x, y] == TileKind.BreakableWall)
+            Tiles[x, y] = TileKind.Floor;
+    }
 
     public RoomInfo RoomAt(int x, int y) => Rooms.FirstOrDefault(r => r.Contains(x, y));
 
