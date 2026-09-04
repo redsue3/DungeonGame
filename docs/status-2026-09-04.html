@@ -1,0 +1,512 @@
+<title>DungeonGame — 다음 할 일</title>
+<style>
+  :root {
+    --bg: #16130f;
+    --bg-raised: #1e1a14;
+    --bg-card: #221d16;
+    --border: #362f24;
+    --border-soft: #2a2419;
+    --text: #eee7d8;
+    --text-dim: #a89b84;
+    --text-faint: #6f6553;
+    --accent: #e08a4f;
+    --accent-strong: #f2a568;
+    --accent-soft: rgba(224, 138, 79, 0.14);
+    --danger: #d8654c;
+    --danger-soft: rgba(216, 101, 76, 0.14);
+    --danger-border: rgba(216, 101, 76, 0.4);
+    --warn: #d4ab52;
+    --warn-soft: rgba(212, 171, 82, 0.13);
+    --warn-border: rgba(212, 171, 82, 0.35);
+    --ok: #7ea779;
+    --ok-soft: rgba(126, 167, 121, 0.13);
+    --ok-border: rgba(126, 167, 121, 0.35);
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+    --sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f6f0e4;
+    --bg-raised: #efe7d6;
+    --bg-card: #fbf6ea;
+    --border: #ddd0b4;
+    --border-soft: #e6dbc3;
+    --text: #2a2318;
+    --text-dim: #6b5f4a;
+    --text-faint: #8a7a5f;
+    --accent: #b35f28;
+    --accent-strong: #954c1d;
+    --accent-soft: rgba(179, 95, 40, 0.12);
+    --danger: #ab3f28;
+    --danger-soft: rgba(171, 63, 40, 0.11);
+    --danger-border: rgba(171, 63, 40, 0.35);
+    --warn: #9c7420;
+    --warn-soft: rgba(156, 116, 32, 0.12);
+    --warn-border: rgba(156, 116, 32, 0.3);
+    --ok: #46703f;
+    --ok-soft: rgba(70, 112, 63, 0.12);
+    --ok-border: rgba(70, 112, 63, 0.3);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f0e4;
+      --bg-raised: #efe7d6;
+      --bg-card: #fbf6ea;
+      --border: #ddd0b4;
+      --border-soft: #e6dbc3;
+      --text: #2a2318;
+      --text-dim: #6b5f4a;
+      --text-faint: #8a7a5f;
+      --accent: #b35f28;
+      --accent-strong: #954c1d;
+      --accent-soft: rgba(179, 95, 40, 0.12);
+      --danger: #ab3f28;
+      --danger-soft: rgba(171, 63, 40, 0.11);
+      --danger-border: rgba(171, 63, 40, 0.35);
+      --warn: #9c7420;
+      --warn-soft: rgba(156, 116, 32, 0.12);
+      --warn-border: rgba(156, 116, 32, 0.3);
+      --ok: #46703f;
+      --ok-soft: rgba(70, 112, 63, 0.12);
+      --ok-border: rgba(70, 112, 63, 0.3);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    padding: 56px 24px 96px;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 40px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-size: 30px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 15px;
+    max-width: 60ch;
+  }
+
+  .status-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-family: var(--mono);
+    padding: 4px 10px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .pill.danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
+  .pill.ok { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); }
+
+  /* ---------- Section headings ---------- */
+  section { margin-bottom: 44px; }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .section-head h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 0;
+  }
+  .section-head .count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  /* ---------- Blocker card ---------- */
+  .blocker {
+    background: var(--bg-card);
+    border: 1px solid var(--danger-border);
+    border-radius: 14px;
+    padding: 22px 24px 24px;
+  }
+
+  .blocker-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .blocker-title .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 0 4px var(--danger-soft);
+    flex: none;
+  }
+
+  .blocker p { color: var(--text-dim); font-size: 14.5px; margin: 0 0 14px; }
+  .blocker p:last-of-type { margin-bottom: 0; }
+
+  .filelist {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: 1px solid var(--danger-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 14px 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* ---------- Compare table ---------- */
+  .compare-wrap { overflow-x: auto; margin-top: 18px; }
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 560px;
+    font-size: 13.5px;
+  }
+  table.compare th {
+    text-align: left;
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 600;
+    padding: 0 12px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.compare th:first-child { width: 108px; padding-left: 0; }
+  table.compare td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: top;
+    color: var(--text-dim);
+  }
+  table.compare td:first-child {
+    padding-left: 0;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+  table.compare td.local-label, table.compare td.remote-label {
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  table.compare tr:last-child td { border-bottom: none; }
+
+  .branch-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 5px;
+    margin-left: 6px;
+  }
+  .branch-tag.local { background: var(--warn-soft); color: var(--warn); }
+  .branch-tag.remote { background: var(--ok-soft); color: var(--ok); }
+
+  .recommend-line {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+    font-size: 14px;
+    color: var(--text);
+  }
+  .recommend-line b { color: var(--accent-strong); }
+
+  /* ---------- Priority chart ---------- */
+  .chart {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 84px 1fr 108px;
+    gap: 14px;
+    align-items: start;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .row.blocked { border-color: var(--danger-border); }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 3px 8px;
+    border-radius: 6px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .badge.p0 { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-border); }
+  .badge.p1 { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-border); }
+  .badge.p2 { background: var(--border-soft); color: var(--text-faint); border: 1px solid var(--border); }
+
+  .row-body .task {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .row-body .desc {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .row-body .desc code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--border-soft);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  .status {
+    font-size: 12px;
+    font-family: var(--mono);
+    text-align: right;
+    color: var(--text-faint);
+    padding-top: 2px;
+  }
+  .status.wait { color: var(--warn); }
+  .status.block { color: var(--danger); }
+
+  /* ---------- Footer / recommendation ---------- */
+  .cta {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 14px;
+    padding: 22px 24px;
+  }
+  .cta .eyebrow { color: var(--accent-strong); }
+  .cta h3 { margin: 6px 0 10px; font-size: 18px; }
+  .cta p { color: var(--text-dim); font-size: 14.5px; margin: 0; }
+  .cta code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: var(--text);
+  }
+
+  footer.note {
+    margin-top: 40px;
+    font-size: 12.5px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  @media (max-width: 520px) {
+    .row { grid-template-columns: 1fr; }
+    .status { text-align: left; }
+    table.compare { min-width: 480px; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">redsue3 / DungeonGame · master</div>
+    <h1>병합은 끝났지만, 설계가 둘로 갈라졌다</h1>
+    <p class="subtitle">devlog.md 전체(584줄)와 현재 git 상태를 읽고 정리한 현황판. pull 자체는 fast-forward로 성공했지만, stash를 되돌리는 과정에서 로컬 작업과 원격 작업이 같은 "3단계" 기능을 서로 다른 설계로 각자 완성해놓은 게 드러났다.</p>
+    <div class="status-row">
+      <span class="pill danger">충돌 파일 7개 · 컴파일 불가</span>
+      <span class="pill">stash@{0} 보존됨 · 유실 없음</span>
+      <span class="pill ok">pull 자체는 완료 (55f395f → 7ad21d1)</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <h2>지금 막힌 것</h2>
+    </div>
+
+    <div class="blocker">
+      <div class="blocker-title">
+        <span class="dot"></span>
+        "3단계: 맵 탐색 중 카드 사용"을 두 갈래로 각자 끝냄
+      </div>
+      <p>
+        로컬(stash)과 원격(origin/master)이 같은 지점(7/8)에서 갈라져 같은 목표를 서로 다르게 구현했다.
+        원격은 그 위에 <code>mana→cost</code> 전면 리네이밍을 포함한 전체 코드 리뷰(7/14)까지 더 얹었다.
+        <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 마커가 남아있는 6개 스크립트/씬 파일은 지금 문법 오류 상태라 Unity가 열리지 않는다.
+      </p>
+
+      <div class="filelist">Assets/Scenes/GameScene.unity · Assets/Scripts/BattleManager.cs · Assets/Scripts/Editor/SceneSetup.cs · Assets/Scripts/System/DungeonManager.cs · Assets/Scripts/System/SaveSystem.cs · Assets/Scripts/System/UI/DungeonMapUI.cs · devlog.md</div>
+
+      <div class="compare-wrap">
+        <table class="compare">
+          <thead>
+            <tr><th></th><th>로컬 (stash) · 7/10</th><th>원격 (origin/master) · 7/13–14</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>자원 설계</td>
+              <td class="local-label">탐사 코스트 별도 자원<span class="branch-tag local">신규 필드</span></td>
+              <td class="remote-label">전투 코스트를 맵까지 공유<span class="branch-tag remote">이동으로 재생</span></td>
+            </tr>
+            <tr>
+              <td>부가 기능</td>
+              <td>"기습" 예약(방어막/버프 1장 저장 → 전투 진입 시 발동), 부서지는 벽 + 카드 자동소모</td>
+              <td>없음 — 대신 첫 턴 리필 생략 + 리필 틈 페널티로 자원 하나를 정교화</td>
+            </tr>
+            <tr>
+              <td>신규 파일</td>
+              <td><code>ExplorationCostSystem.cs</code>, <code>UI/CardTabUI.cs</code> <span style="color:var(--text-faint)">(현재 untracked)</span></td>
+              <td><code>MapCardSystem.cs</code>, <code>UI/MapCardUI.cs</code> <span style="color:var(--text-faint)">(이미 커밋됨)</span></td>
+            </tr>
+            <tr>
+              <td>그 위 작업</td>
+              <td>없음 — 이 세션 이후 미착수</td>
+              <td>전체 코드 리뷰 반영: 버그 7건 수정, 죽은 코드 정리, <code>mana→cost</code> 리네이밍, <code>EnemyAiSystem</code> 분리</td>
+            </tr>
+            <tr>
+              <td>미검증</td>
+              <td>기습 밸런스 사용자 피드백 대기 중이라고 devlog에 직접 명시</td>
+              <td>플레이 테스트 자체는 자동 스모크로 다수 통과, 손맛만 미확인</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="recommend-line">
+        지금 작업 폴더엔 두 설계의 신규 파일이 <b>동시에</b> 존재한다 — <code>MapCardSystem.cs</code>(원격, 커밋됨)와 <code>ExplorationCostSystem.cs</code>(로컬, untracked)가 같은 문제를 다르게 풀며 나란히 놓여 있는 상태. 원격 쪽이 그 위에 리네이밍 + 버그수정까지 이미 얹혀 있어서 <b>되돌리기 비용이 더 크다</b> — 이게 유일한 판단 근거는 아니지만, 결정은 코드 내용을 아는 사람 몫이라 내가 임의로 골라 덮어쓰지 않았다.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>충돌 해결 이후 남은 일</h2>
+      <span class="count">devlog 전체에서 아직 "미착수/미확인"으로 남아있는 항목만</span>
+    </div>
+
+    <div class="chart">
+      <div class="row blocked">
+        <span class="badge p0">P0</span>
+        <div class="row-body">
+          <div class="task">3단계 설계 택일 + 충돌 7개 해결</div>
+          <div class="desc">위 비교표 참고. 어느 쪽을 살릴지 정해지면 나머지 항목은 그 위에서 이어감.</div>
+        </div>
+        <div class="status block">결정 대기</div>
+      </div>
+
+      <div class="row">
+        <span class="badge p1">P1</span>
+        <div class="row-body">
+          <div class="task">최근 구현 실제 플레이 확인</div>
+          <div class="desc">7/13 LOS/BFS(벽 뒤 적 안 쫓아오는지, 접촉 시 전투 개시), 채택된 3단계 설계의 손맛(원격이면 코스트 자동종료·집단전 타겟·적별 골드, 로컬이면 기습 예약) — 둘 다 devlog에 "다음에 Unity 열 때 확인"으로만 적혀있고 아직 실행 안 됨.</div>
+        </div>
+        <div class="status wait">미확인</div>
+      </div>
+
+      <div class="row">
+        <span class="badge p1">P1</span>
+        <div class="row-body">
+          <div class="task">맵 마커 UI — 스프라이트로 교체</div>
+          <div class="desc">적/플레이어가 아직 <code>텍스트+색깔 사각형</code>뿐. 7/8부터 "애니메이션 넣을 때 같이 정리"로 미뤄온 항목.</div>
+        </div>
+        <div class="status">보류중</div>
+      </div>
+
+      <div class="row">
+        <span class="badge p2">P2</span>
+        <div class="row-body">
+          <div class="task">상단 상태바 · 안개 대비 다듬기</div>
+          <div class="desc">HP/골드/배고픔 배치, 방문/시야 안개 대비 — 7/8 "미해결 UI 피드백"에서 그대로 이월.</div>
+        </div>
+        <div class="status">보류중</div>
+      </div>
+
+      <div class="row">
+        <span class="badge p2">P2</span>
+        <div class="row-body">
+          <div class="task">4단계 — 전투를 그리드로 통합</div>
+          <div class="desc">전투 중 이동/도주/카이팅. 7/8부터 "추후"로 계속 미뤄진 가장 큰 미착수 항목, 사실상 재설계 규모.</div>
+        </div>
+        <div class="status">미착수</div>
+      </div>
+
+      <div class="row">
+        <span class="badge p2">P2</span>
+        <div class="row-body">
+          <div class="task"><code>Animation/</code> 폴더 사용 여부</div>
+          <div class="desc">7/14 코드 리뷰에서 "죽은 코드지만 스프라이트 작업 때 쓸 예정"이라 삭제 보류. 여전히 미사용 상태로 남아있음.</div>
+        </div>
+        <div class="status">판단 보류</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta">
+    <div class="eyebrow">내가 제안하는 다음 한 걸음</div>
+    <h3>먼저 3단계 설계부터 골라주세요</h3>
+    <p>
+      나머지는 순서를 바꿔도 되지만 이건 아니다 — 지금 6개 스크립트에 <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 마커가 남아있어 Unity를 열어도 컴파일이 안 된다.
+      "로컬(기습+부서지는 벽) 유지", "원격(코드 리뷰까지 반영된 쪽) 유지", 또는 "두 설계를 합쳐서 직접 병합" 중 방향만 정해주면
+      충돌 파일 7개를 그 기준으로 정리하고, <code>ExplorationCostSystem.cs</code>/<code>CardTabUI.cs</code> 같은 untracked 파일도 같이 처리하겠습니다.
+    </p>
+  </div>
+
+  <footer class="note">DungeonGame devlog.md(584줄) 및 git status/log 기준, 2026-09-04 작성.</footer>
+
+</div>
