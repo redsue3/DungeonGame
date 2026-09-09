@@ -67,7 +67,7 @@ public static class SceneSetup
         // ── 패널 ──
         GameObject characterSelectPanel = BuildCharacterSelectPanel(canvasGO.transform);
         GameObject dungeonMapPanel      = BuildDungeonMapPanel(canvasGO.transform, tilePrefab, foodItemPrefab, cardPrefab);
-        GameObject battlePanel          = BuildBattlePanel(canvasGO.transform, cardPrefab, enemyPanelPrefab);
+        GameObject battlePanel          = BuildBattlePanel(canvasGO.transform, cardPrefab, enemyPanelPrefab, tilePrefab);
         GameObject rewardPanel          = BuildRewardPanel(canvasGO.transform, cardPrefab);
         GameObject restPanel            = BuildRestPanel(canvasGO.transform);
         GameObject shopPanel            = BuildShopPanel(canvasGO.transform, shopItemPrefab, cardPrefab);
@@ -475,7 +475,7 @@ public static class SceneSetup
         return root;
     }
 
-    private static GameObject BuildBattlePanel(Transform canvas, GameObject cardPrefab, GameObject enemyPanelPrefab)
+    private static GameObject BuildBattlePanel(Transform canvas, GameObject cardPrefab, GameObject enemyPanelPrefab, GameObject tilePrefab)
     {
         GameObject panel = FullPanel("BattlePanel", canvas, new Color(0.05f, 0.05f, 0.08f));
 
@@ -501,12 +501,19 @@ public static class SceneSetup
         var playerStatusText = TextLine(top.transform, "StatusText", "", 16, new Color(0.6f, 0.9f, 0.6f), 32, 240);
         var turnText          = TextLine(top.transform, "TurnText", "당신의 턴", 20, new Color(1f, 0.85f, 0.3f), 32, 150);
 
+        // 4단계(전투 그리드 통합) - 왼쪽엔 방 그리드(이동/도주), 오른쪽엔 적 상태 패널.
+        GameObject gridArea = NewGO("BattleGridArea", panel.transform);
+        Anchor(gridArea.GetComponent<RectTransform>(), new Vector2(0.03f, 0.52f), new Vector2(0.58f, 0.85f), Vector2.zero, Vector2.zero);
+
+        var moveHintText = Text(panel.transform, "MoveHint", "인접 칸 클릭 또는 WASD로 이동", 15, TextAlignmentOptions.Center, TextDim);
+        Anchor(moveHintText.rectTransform, new Vector2(0.03f, 0.485f), new Vector2(0.58f, 0.515f), Vector2.zero, Vector2.zero);
+
         GameObject enemyArea = NewGO("EnemyArea", panel.transform);
-        Anchor(enemyArea.GetComponent<RectTransform>(), new Vector2(0.1f, 0.5f), new Vector2(0.9f, 0.85f), Vector2.zero, Vector2.zero);
+        Anchor(enemyArea.GetComponent<RectTransform>(), new Vector2(0.62f, 0.5f), new Vector2(0.98f, 0.85f), Vector2.zero, Vector2.zero);
         var enemyGrid = enemyArea.AddComponent<GridLayoutGroup>();
         enemyGrid.cellSize = new Vector2(220, 180);
-        enemyGrid.spacing = new Vector2(20, 10);
-        enemyGrid.childAlignment = TextAnchor.MiddleCenter;
+        enemyGrid.spacing = new Vector2(16, 10);
+        enemyGrid.childAlignment = TextAnchor.UpperCenter;
 
         GameObject handArea = NewGO("HandArea", panel.transform);
         Anchor(handArea.GetComponent<RectTransform>(), new Vector2(0.02f, 0.14f), new Vector2(0.98f, 0.5f), Vector2.zero, Vector2.zero);
@@ -546,6 +553,9 @@ public static class SceneSetup
         Bind(ui, "discardCountText", discardCountText);
         Bind(ui, "endTurnBtn", endTurnBtn);
         Bind(ui, "turnText", turnText);
+        Bind(ui, "battleGridParent", gridArea.transform);
+        Bind(ui, "battleTilePrefab", tilePrefab);
+        Bind(ui, "moveHintText", moveHintText);
 
         return panel;
     }

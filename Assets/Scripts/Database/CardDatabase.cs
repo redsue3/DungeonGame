@@ -16,16 +16,18 @@ public static class CardDatabase
         ["combo"]         = new Card("combo",         "연격",         2, CardType.Attack,  dmg: 5, draw: 1),
 
         // 마법사 스타터
-        ["fireball"]      = new Card("fireball",      "화염구",       1, CardType.Attack,  dmg:  7),
+        // fireball/lightning은 4단계(전투 그리드) 부터 사거리 3짜리 원거리 주문 - 마법사의 "키이팅" 정체성
+        ["fireball"]      = new Card("fireball",      "화염구",       1, CardType.Attack,  dmg:  7, range: 3),
         ["mana_shield"]   = new Card("mana_shield",   "마력 방벽",    1, CardType.Defense, blk:  4),
-        ["lightning"]     = new Card("lightning",     "번개",         2, CardType.Attack,  dmg: 18),
+        ["lightning"]     = new Card("lightning",     "번개",         2, CardType.Attack,  dmg: 18, range: 3),
         ["draw_spell"]    = new Card("draw_spell",    "드로우 마법",  1, CardType.Skill,   draw: 2),
 
         // 성기사 스타터
+        // judgement는 원거리 신성 주문 취급 (사거리 2)
         ["holy_strike"]   = new Card("holy_strike",   "성스러운 일격", 1, CardType.Attack,  dmg: 5),
         ["shield_bash"]   = new Card("shield_bash",   "방패 강타",    1, CardType.Defense, blk: 6),
         ["sacred_heal"]   = new Card("sacred_heal",   "신성한 치유",  2, CardType.Skill,   heal: 8),
-        ["judgement"]     = new Card("judgement",     "심판",         2, CardType.Attack,  dmg: 14),
+        ["judgement"]     = new Card("judgement",     "심판",         2, CardType.Attack,  dmg: 14, range: 2),
 
         // 1계층 드롭
         ["double_strike"] = new Card("double_strike", "연속 강타",    2, CardType.Attack,  dmg: 10),
@@ -49,7 +51,7 @@ public static class CardDatabase
         ["perfect_guard"] = new Card("perfect_guard", "완벽한 가드",  2, CardType.Defense, blk: 18),
         ["plague_strike"] = new Card("plague_strike", "역병 일격",    1, CardType.Attack,  dmg: 5, poison: 5),
         ["soul_drain"]    = new Card("soul_drain",    "영혼 흡수",    2, CardType.Attack,  dmg: 10, heal: 6),
-        ["chaos_flame"]   = new Card("chaos_flame",   "혼돈 화염",    0, CardType.Attack,  dmg: 8, burn: 3, selfDmg: 4),
+        ["chaos_flame"]   = new Card("chaos_flame",   "혼돈 화염",    0, CardType.Attack,  dmg: 8, burn: 3, selfDmg: 4, range: 3),
         ["thunder_storm"] = new Card("thunder_storm", "뇌우",         3, CardType.Attack,  dmg: 12, aoe: true),
         ["blessing"]      = new Card("blessing",      "축복",         1, CardType.Skill,   draw: 2, str: 1),
 

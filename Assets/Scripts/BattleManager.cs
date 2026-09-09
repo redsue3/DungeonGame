@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum BattleState { PlayerTurn, EnemyTurn, Win, Lose }
+public enum BattleState { PlayerTurn, EnemyTurn, Win, Lose, Fled }
 
 public class BattleManager : MonoBehaviour
 {
@@ -17,23 +17,33 @@ public class BattleManager : MonoBehaviour
     private HashSet<string>  usedOnceRelics = new HashSet<string>(); // 전투당 1회만 발동하는 유물(불사조의 재 등)
     private HashSet<Enemy>   rewardedKills  = new HashSet<Enemy>();  // OnKill 유물을 이미 발동시킨 적 (중복 발동 방지)
 
+    // 4단계(전투 그리드 통합) - 전투가 벌어지는 방과 그 방이 속한 층. 이동/도주/사거리 판정에 쓴다.
+    private DungeonFloor     floor;
+    private RoomInfo         room;
+    private bool             hasMovedThisTurn; // 턴당 이동은 1칸만 (카드 코스트와 별개의 자원)
+
     private const int CostDrainPenalty = 1;
 
-    public int         CurrentCost  => player != null ? player.currentCost : 0;
-    public BattleState CurrentState => state;
+    public int         CurrentCost      => player != null ? player.currentCost : 0;
+    public BattleState CurrentState     => state;
+    public bool         HasMovedThisTurn => hasMovedThisTurn;
+    public RoomInfo    Room             => room;
     public List<Enemy> GetEnemies() => enemies;
 
     void Awake() => Instance = this;
 
-    // 집단 조우
-    public void StartBattle(PlayerCharacter playerCharacter, List<Enemy> enemyList)
+    // 집단 조우. dungeonFloor/battleRoom - 전투 중 이동/사거리/도주 판정에 쓰는 그리드 컨텍스트.
+    public void StartBattle(PlayerCharacter playerCharacter, List<Enemy> enemyList, DungeonFloor dungeonFloor, RoomInfo battleRoom)
     {
         player  = playerCharacter;
         enemies = new List<Enemy>(enemyList);
+        floor   = dungeonFloor;
+        room    = battleRoom;
         usedOnceRelics.Clear();
         rewardedKills.Clear();
         costRefillPenalty = 0;
         firstPlayerTurn   = true;
+        hasMovedThisTurn  = false;
         player.deck.ResetForBattle();
         HungerSystem.OnBattleStart(player);
         ApplyRelicTrigger(RelicTrigger.OnBattleStart);
@@ -41,14 +51,17 @@ public class BattleManager : MonoBehaviour
     }
 
     // 개별 조우 편의 오버로드
-    public void StartBattle(PlayerCharacter playerCharacter, Enemy enemy)
-        => StartBattle(playerCharacter, new List<Enemy> { enemy });
+    public void StartBattle(PlayerCharacter playerCharacter, Enemy enemy, DungeonFloor dungeonFloor, RoomInfo battleRoom)
+        => StartBattle(playerCharacter, new List<Enemy> { enemy }, dungeonFloor, battleRoom);
 
     private IEnumerator BattleLoop()
     {
         state = BattleState.PlayerTurn;
 
-        while (player.IsAlive && enemies.Exists(e => e.IsAlive))
+        // Fled는 TryMovePlayer가 직접 세팅하고 끝내는 상태라 여기서 별도 루프 처리는 안 함 -
+        // 조건에서 걸러서 while을 빠져나가게만 하면 된다(안 걸러지면 매 프레임 아무 분기도 안 타는 채로
+        // while이 계속 도는 무한루프에 빠져 에디터가 멈춘다).
+        while (player.IsAlive && enemies.Exists(e => e.IsAlive) && state != BattleState.Fled)
         {
             if (state == BattleState.PlayerTurn)
                 yield return StartCoroutine(PlayerTurn());
@@ -56,13 +69,15 @@ public class BattleManager : MonoBehaviour
                 yield return StartCoroutine(EnemyTurn());
         }
 
-        state = player.IsAlive ? BattleState.Win : BattleState.Lose;
+        if (state != BattleState.Fled)
+            state = player.IsAlive ? BattleState.Win : BattleState.Lose;
         OnBattleEnd();
     }
 
     private IEnumerator PlayerTurn()
     {
-        playerTurnEnded = false;
+        playerTurnEnded  = false;
+        hasMovedThisTurn = false;
 
         if (firstPlayerTurn)
         {
@@ -115,6 +130,19 @@ public class BattleManager : MonoBehaviour
             return false;
         }
 
+        // 4단계 - 단일 대상 공격/독/화상 카드는 카드의 사거리(체비쇼프 거리) 안에 있어야 닿는다.
+        // AoE는 방 전체를 때리므로 사거리 무관.
+        bool hasOffense = card.damage > 0 || card.poisonApply > 0 || card.burnApply > 0;
+        if (hasOffense && !card.isAoe)
+        {
+            Enemy resolved = target != null && target.IsAlive ? target : enemies.Find(e => e.IsAlive);
+            if (resolved != null && BattleGridSystem.Chebyshev(floor.PlayerX, floor.PlayerY, resolved.x, resolved.y) > card.attackRange)
+            {
+                Debug.Log($"[{card.cardName}] 사거리 밖! (사거리 {card.attackRange})");
+                return false;
+            }
+        }
+
         player.currentCost -= card.cost;
         player.deck.PlayCard(handIndex, BuildTargets(card, target), player, player.GetFinalAttackBonus());
         Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{player.currentCost}");
@@ -154,6 +182,34 @@ public class BattleManager : MonoBehaviour
         NotifyUI();
     }
 
+    // 전투 중 플레이어 이동 - UI(그리드 타일 클릭/WASD)에서 호출. 턴당 1칸만 허용.
+    // 방 밖으로 나가면 도주: 그 순간 인접해 있던 적들의 공격 의도가 Attack이면 이탈 공격이 발동한다.
+    public bool TryMovePlayer(int dx, int dy)
+    {
+        if (state != BattleState.PlayerTurn || hasMovedThisTurn) return false;
+
+        var result = BattleGridSystem.TryMovePlayer(floor, room, enemies, dx, dy, out List<Enemy> attackers);
+        if (result == BattleGridSystem.MoveResult.Blocked) return false;
+
+        hasMovedThisTurn = true;
+
+        if (result == BattleGridSystem.MoveResult.Fled)
+        {
+            foreach (Enemy attacker in attackers)
+            {
+                EnemyAction action = attacker.PeekNextAction();
+                if (action.intent != EnemyIntent.Attack) continue;
+                Debug.Log($"[{attacker.characterName}] 이탈 공격!");
+                attacker.ExecuteAction(action, player);
+            }
+            CheckHpBelowTriggers();
+            state = player.IsAlive ? BattleState.Fled : BattleState.Lose;
+        }
+
+        NotifyUI();
+        return true;
+    }
+
     private IEnumerator EnemyTurn()
     {
         foreach (Enemy e in enemies.FindAll(e => e.IsAlive))
@@ -163,6 +219,21 @@ public class BattleManager : MonoBehaviour
             CheckNewKills(); // 독/화상으로 죽어도 OnKill 유물(혈약 반지 등)이 발동해야 한다
 
             if (!e.IsAlive) continue;
+
+            // 다음 의도가 플레이어를 직접 노리는 행동(공격/독/화상)인데 인접하지 않았으면,
+            // 이번 턴엔 공격 대신 방 범위 안에서 한 칸 접근만 한다 - 의도는 소모되지 않고 다음 턴에 그대로 실행된다.
+            // 방어/버프처럼 스스로에게 거는 행동은 거리와 무관하게 그대로 실행.
+            EnemyAction next = e.PeekNextAction();
+            bool targetsPlayer = next.intent == EnemyIntent.Attack || next.intent == EnemyIntent.Poison || next.intent == EnemyIntent.Burn;
+            bool adjacent = BattleGridSystem.Chebyshev(e.x, e.y, floor.PlayerX, floor.PlayerY) <= 1;
+
+            if (targetsPlayer && !adjacent)
+            {
+                BattleGridSystem.StepEnemyToward(floor, room, e, enemies);
+                Debug.Log($"[{e.characterName}] 접근 중... ({e.x},{e.y})");
+                yield return new WaitForSeconds(0.3f);
+                continue;
+            }
 
             Debug.Log($"=== {e.characterName} 턴 | HP:{e.currentHp}/{e.maxHp} ===");
             yield return new WaitForSeconds(0.4f);
@@ -185,15 +256,20 @@ public class BattleManager : MonoBehaviour
 
     private void OnBattleEnd()
     {
-        if (state == BattleState.Win)
+        switch (state)
         {
-            Debug.Log("승리!");
-            DungeonManager.Instance?.OnBattleWon(enemies);
-        }
-        else
-        {
-            Debug.Log("패배...");
-            DungeonManager.Instance?.OnBattleLost();
+            case BattleState.Win:
+                Debug.Log("승리!");
+                DungeonManager.Instance?.OnBattleWon(enemies);
+                break;
+            case BattleState.Fled:
+                Debug.Log("도주 성공");
+                DungeonManager.Instance?.OnBattleFled(floor, enemies);
+                break;
+            default:
+                Debug.Log("패배...");
+                DungeonManager.Instance?.OnBattleLost();
+                break;
         }
     }
 

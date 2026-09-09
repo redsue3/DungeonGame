@@ -43,6 +43,7 @@ public class CardSnapshot
     public int      growOnUse;
     public int      buffNextAttack;
     public int      buffNextDefense;
+    public int      attackRange = 1; // 4단계(전투 그리드) - 필드 없는 구버전 세이브는 기본값 1(근접)로 복원된다
 }
 
 public static class SaveSystem
@@ -150,6 +151,7 @@ public static class SaveSystem
                 damage = c.damage, block = c.block, drawCount = c.drawCount, healAmount = c.healAmount,
                 strengthGain = c.strengthGain, poisonApply = c.poisonApply, burnApply = c.burnApply, selfDamage = c.selfDamage,
                 growOnUse = c.growOnUse, buffNextAttack = c.buffNextAttack, buffNextDefense = c.buffNextDefense,
+                attackRange = c.attackRange,
             };
         }
         return snaps;
@@ -159,7 +161,8 @@ public static class SaveSystem
         s.id, s.cardName, s.manaCost, s.cardType,
         dmg: s.damage, blk: s.block, draw: s.drawCount, heal: s.healAmount,
         str: s.strengthGain, poison: s.poisonApply, burn: s.burnApply, selfDmg: s.selfDamage, aoe: s.isAoe,
-        growOnUse: s.growOnUse, buffNextAttack: s.buffNextAttack, buffNextDefense: s.buffNextDefense);
+        growOnUse: s.growOnUse, buffNextAttack: s.buffNextAttack, buffNextDefense: s.buffNextDefense,
+        range: s.attackRange);
 
     private static string[] ExtractFoodIds(Inventory inventory)
     {

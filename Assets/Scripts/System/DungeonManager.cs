@@ -95,17 +95,53 @@ public class DungeonManager : MonoBehaviour
     // spawn이 속한 방의 살아있는 적 전원과 전투 시작 (집단 조우)
     private void Engage(EnemySpawn spawn)
     {
-        currentRoom = CurrentFloor.Rooms.FirstOrDefault(r => r.id == spawn.roomId);
+        RoomInfo homeRoom = CurrentFloor.Rooms.FirstOrDefault(r => r.id == spawn.roomId);
+        currentRoom = homeRoom; // 보상/처치 판정(OnBattleWon)은 실제 방 id/타입이 필요해서 그대로 유지
 
+        var spawns = CurrentFloor.AliveEnemiesInRoom(spawn.roomId).ToList();
         var enemyList = new List<Enemy>();
-        foreach (EnemySpawn s in CurrentFloor.AliveEnemiesInRoom(spawn.roomId))
+        foreach (EnemySpawn s in spawns)
         {
             Enemy e = EnemyFactory.Create(s.enemyTemplateId);
-            if (e != null) enemyList.Add(e);
+            if (e == null) continue;
+            // 4단계 - 전투는 이 EnemySpawn이 서 있던 그리드 좌표에서 그대로 이어진다.
+            // spawnId를 들고 있어야 도주 시 최종 위치를 다시 EnemySpawn에 되돌려줄 수 있다.
+            e.spawnId = s.id;
+            e.x = s.x;
+            e.y = s.y;
+            enemyList.Add(e);
         }
 
-        BattleManager.Instance.StartBattle(Player, enemyList);
+        // 4단계 - 이동/도주 경계는 homeRoom 사각형이 아니라 "실제 접촉 위치를 포함하도록 넓힌" 경계를 쓴다.
+        // Chasing 상태의 적은 EnemyAiSystem이 맵 전체를 BFS로 쫓아오게 하므로, 홈룸 밖(복도 등)에서
+        // 접촉하는 경우가 흔하다 - homeRoom을 그대로 쓰면 그 순간 이미 "방 밖"이라 첫 이동에 오작동 도주가 나거나
+        // 다른 무리원이 경계 밖에 있어 영원히 접근 못 하는 상태가 된다.
+        RoomInfo battleBounds = BuildBattleBounds(homeRoom, CurrentFloor.PlayerX, CurrentFloor.PlayerY, spawns);
+
+        BattleManager.Instance.StartBattle(Player, enemyList, CurrentFloor, battleBounds);
         TransitionTo(GameState.Battle);
+    }
+
+    // homeRoom 사각형 + 플레이어/적들의 실제 좌표를 전부 포함하도록 확장한 뒤 여유 패딩을 준 경계.
+    // Contains()가 벽 칸까지 true를 반환해도 무해하다 - BattleGridSystem은 어차피 IsWalkable로 한 번 더 거른다.
+    private RoomInfo BuildBattleBounds(RoomInfo homeRoom, int px, int py, List<EnemySpawn> spawns)
+    {
+        int minX = homeRoom?.x ?? px;
+        int minY = homeRoom?.y ?? py;
+        int maxX = homeRoom != null ? homeRoom.x + homeRoom.w - 1 : px;
+        int maxY = homeRoom != null ? homeRoom.y + homeRoom.h - 1 : py;
+
+        minX = Mathf.Min(minX, px); minY = Mathf.Min(minY, py);
+        maxX = Mathf.Max(maxX, px); maxY = Mathf.Max(maxY, py);
+        foreach (EnemySpawn s in spawns)
+        {
+            minX = Mathf.Min(minX, s.x); minY = Mathf.Min(minY, s.y);
+            maxX = Mathf.Max(maxX, s.x); maxY = Mathf.Max(maxY, s.y);
+        }
+
+        const int pad = 2;
+        minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+        return new RoomInfo { id = -1, x = minX, y = minY, w = maxX - minX + 1, h = maxY - minY + 1 };
     }
 
     // 휴식/상점/성소는 아이콘이 표시되는 방 중심 타일에 직접 접촉했을 때만 발동 (방 전체 범위 아님)
@@ -205,6 +241,25 @@ public class DungeonManager : MonoBehaviour
     }
 
     public void OnBattleLost() => TransitionTo(GameState.GameOver);
+
+    // BattleManager에서 호출 - 전투 중 도주 성공. 보상은 없고, 적의 최종 위치/생사만 EnemySpawn에 되돌린다.
+    // 죽인 적은 그대로 사망 처리, 살아남은 적은 위치를 옮기고 Chasing 상태를 유지해서 계속 쫓아오게 한다.
+    public void OnBattleFled(DungeonFloor battleFloor, List<Enemy> battleEnemies)
+    {
+        foreach (Enemy e in battleEnemies)
+        {
+            EnemySpawn spawn = battleFloor.Enemies.FirstOrDefault(s => s.id == e.spawnId);
+            if (spawn == null) continue;
+
+            if (!e.IsAlive) { spawn.isDead = true; continue; }
+            spawn.x = e.x;
+            spawn.y = e.y;
+            spawn.state = EnemyAiState.Chasing;
+        }
+
+        Debug.Log("[DungeonManager] 도주 성공 - 맵으로 복귀");
+        TransitionTo(GameState.DungeonMap);
+    }
 
     // 카드 보상 선택 (UI에서 호출)
     public void ChooseCard(string cardId)

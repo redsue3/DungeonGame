@@ -25,10 +25,14 @@ public class Card
     public int buffNextAttack;  // 사용 시 시전자의 '다음 공격 카드' 데미지를 이만큼 예약 증가
     public int buffNextDefense; // 사용 시 시전자의 '다음 방어 카드' 방어막을 이만큼 예약 증가
 
+    // 4단계(전투 그리드 통합, 2026-09) - 단일 대상 공격/독/화상 카드가 닿을 수 있는 체비쇼프 거리.
+    // 기본값 1(인접/근접)이며 AoE 카드는 사거리 무관하게 방 전체를 때린다(BattleManager가 체크 생략).
+    public int attackRange = 1;
+
     public Card(string id, string name, int cost, CardType type,
                 int dmg = 0, int blk = 0, int draw = 0, int heal = 0,
                 int str = 0, int poison = 0, int burn = 0, int selfDmg = 0, bool aoe = false,
-                int growOnUse = 0, int buffNextAttack = 0, int buffNextDefense = 0)
+                int growOnUse = 0, int buffNextAttack = 0, int buffNextDefense = 0, int range = 1)
     {
         this.id      = id;
         cardName     = name;
@@ -46,6 +50,7 @@ public class Card
         this.growOnUse       = growOnUse;
         this.buffNextAttack  = buffNextAttack;
         this.buffNextDefense = buffNextDefense;
+        attackRange          = range;
         RebuildDescription();
     }
 
@@ -88,6 +93,8 @@ public class Card
         if (buffNextAttack > 0)  parts.Add($"다음 공격 카드 데미지 +{buffNextAttack}");
         if (buffNextDefense > 0) parts.Add($"다음 방어 카드 방어막 +{buffNextDefense}");
         if (isAoe)               parts.Add("[전체]");
+        else if (attackRange > 1 && (damage > 0 || poisonApply > 0 || burnApply > 0))
+            parts.Add($"사거리 {attackRange}");
         description = string.Join(", ", parts);
     }
 
