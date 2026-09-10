@@ -11,6 +11,22 @@ public static class BattleGridSystem
     public static int Chebyshev(int x1, int y1, int x2, int y2) =>
         System.Math.Max(System.Math.Abs(x1 - x2), System.Math.Abs(y1 - y2));
 
+    // (fx,fy)→(fx+dx,fy+dy) 한 칸 이동이 막혀 있지 않은지(목적지 통행 가능 + 대각선 코너컷 방지).
+    // TryMovePlayer와 BattleUI의 인접 타일 하이라이트가 같은 기준을 쓰도록 여기 하나로 뽑아뒀다 -
+    // 따로 판정하면 "눌리는데 반응 없는 칸"처럼 UI와 실제 이동 가능 여부가 어긋난다.
+    public static bool CanStepTo(DungeonFloor floor, int fx, int fy, int dx, int dy)
+    {
+        int nx = fx + dx, ny = fy + dy;
+        if (!floor.IsWalkable(nx, ny)) return false;
+
+        // 대각선 이동은 양쪽 직교 칸이 전부 걸을 수 있어야 허용 - 안 그러면 벽 모서리를
+        // 두 칸 다 막힌 채로 대각선으로만 뚫고 지나갈 수 있다(4방향 전용인 WASD/던전맵과 불일치).
+        if (dx != 0 && dy != 0)
+            return floor.IsWalkable(fx + dx, fy) && floor.IsWalkable(fx, fy + dy);
+
+        return true;
+    }
+
     // 플레이어 전투 중 이동. 방 안이면 그냥 이동, 방 경계 밖으로 나가면 도주 성공 -
     // 그 순간 인접해 있던 살아있는 적들은 opportunityAttackers로 반환되어 호출자가 이탈 공격을 처리한다.
     public static MoveResult TryMovePlayer(DungeonFloor floor, RoomInfo room, List<Enemy> enemies,
@@ -18,8 +34,9 @@ public static class BattleGridSystem
     {
         opportunityAttackers = new List<Enemy>();
 
+        if (!CanStepTo(floor, floor.PlayerX, floor.PlayerY, dx, dy)) return MoveResult.Blocked;
+
         int nx = floor.PlayerX + dx, ny = floor.PlayerY + dy;
-        if (!floor.IsWalkable(nx, ny)) return MoveResult.Blocked;
         if (enemies.Any(e => e.IsAlive && e.x == nx && e.y == ny)) return MoveResult.Blocked;
 
         bool leavingRoom = !room.Contains(nx, ny);

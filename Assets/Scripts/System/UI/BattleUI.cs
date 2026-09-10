@@ -164,6 +164,7 @@ public class BattleUI : MonoBehaviour
                 {
                     selectedTarget = captured;
                     RefreshEnemies();
+                    RefreshHand(); // 타겟이 바뀌면 사거리 판정도 다시 해야 카드 활성화 상태가 즉시 맞는다
                 });
         }
     }
@@ -267,7 +268,10 @@ public class BattleUI : MonoBehaviour
                 lbl.text  = "";
             }
 
-            bool isAdjacent = !isPlayer && System.Math.Abs(x - floor.PlayerX) <= 1 && System.Math.Abs(y - floor.PlayerY) <= 1;
+            int  ddx = x - floor.PlayerX, ddy = y - floor.PlayerY;
+            // BattleGridSystem.CanStepTo와 같은 기준(대각선 코너컷 포함)을 써야 밝게 보이는 칸과
+            // 실제로 클릭했을 때 이동되는 칸이 일치한다 - 안 그러면 눌리는데 반응 없는 죽은 클릭이 생긴다.
+            bool isAdjacent = !isPlayer && BattleGridSystem.CanStepTo(floor, floor.PlayerX, floor.PlayerY, ddx, ddy);
 
             btn.onClick.RemoveAllListeners();
             if (occupant != null)
@@ -279,7 +283,6 @@ public class BattleUI : MonoBehaviour
             }
             else if (canAct && isAdjacent)
             {
-                int ddx = x - floor.PlayerX, ddy = y - floor.PlayerY;
                 btn.interactable = true;
                 btn.onClick.AddListener(() => TryMove(ddx, ddy));
             }

@@ -643,4 +643,21 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 
 **참고**: 이번 세션에서 만든 임시 배치모드 로그 파일(`compile_check.log`/`scene_setup.log`/`font_bake.log`/`playtest.log`, 프로젝트 루트)은 검증용이라 지워도 무방.
 
+---
+
+## 4단계 코드 리뷰 결과 반영 (2026-09-10, Unity 실행 검증은 여전히 안 됨)
+
+배치모드 검증(위 항목)은 컴파일/씬/폰트까지만 통과했고 실제 플레이 확인은 못한 채로, `/code-review a789e70 --level high`로 4단계(전투 그리드 통합) 커밋을 정적 리뷰함. 실제 버그 3건 + 중복/성능 3건 발견 → 실제 버그 3건을 고쳤는데, 그 수정 2건이 서로 상호작용해서 새 버그 2건을 또 만들어서 한 번 더 고침(교차 검증 재리뷰로 발견). 전부 배치모드 컴파일 확인만 거쳤고 **Play 모드로 직접 돌려본 적은 없음** — 아래 전부 다음 Unity 세션에서 실제 확인 필요.
+
+**1차 수정 — 리뷰에서 발견한 실제 버그 3건**:
+- `BattleUI.cs` 적 패널로 타겟 재선택 시 `RefreshEnemies()`만 호출하고 `RefreshHand()`는 안 불러서 카드 활성화(사거리 판정)가 즉시 안 맞던 문제 → 타겟 클릭 핸들러에 `RefreshHand()` 추가.
+- `DungeonManager.Engage()` — 플레이어가 적 타일로 직접 걸어들어가 조우하면 그 적의 좌표가 플레이어 좌표와 겹친 채로 전투가 시작돼서(`BattleUI`가 `isPlayer` 칸이면 `occupant=null` 처리) 그리드에 안 보이고 클릭 타겟팅도 안 되던 문제 → `ResolvePlayerTileOverlap`/`FindNearestFreeTile`/`IsFreeTile` 신규로 겹친 적을 인접한 빈 칸(4방향→대각선→반경 확장 순)으로 밀어냄.
+- `BattleGridSystem.TryMovePlayer` — 대각선 이동 시 목적지 칸만 체크하고 지나가는 두 직교 칸은 안 봐서, 양쪽 다 벽인 코너를 대각선으로 뚫고 지나갈 수 있던 문제(WASD/던전맵은 4방향 전용이라 여기만 가능했던 구멍) → 대각선 이동은 양쪽 직교 칸이 둘 다 걸을 수 있어야 허용하도록 체크 추가.
+
+**2차 수정 — 위 수정 2건이 만든 새 버그 2건 (교차 검증 재리뷰로 발견)**:
+- `FindNearestFreeTile`의 폴백 반경이 4칸까지 확장되는데 `BuildBattleBounds`의 패딩은 2칸뿐이라, 좁은 코너에서 밀려난 적이 전투 경계(`battleBounds`) 밖으로 나가면 `BattleGridSystem.BfsPath`가 `room.Contains` 필터에 막혀 그 적이 전투 내내 접근/공격을 영영 못 하고(그리드에 렌더링도 안 됨) 멈춰버리는 문제 → 폴백 반경을 패딩과 맞춰 2로 제한.
+- `BattleGridSystem`에 추가한 대각선 코너컷 체크가 `BattleUI.RepaintGridTiles`의 `isAdjacent`(하이라이트/클릭 가능 판정)엔 반영이 안 돼서, 코너 막힌 대각선 타일이 여전히 밝게+클릭 가능하게 보이는데 실제로 누르면 `TryMovePlayer`가 조용히 `Blocked`를 반환해 아무 반응이 없는 "죽은 클릭"이 생기던 문제(7/7에 있었던 "클릭해도 안 움직이는 칸" 증상과 같은 사용자 경험 재발) → `BattleGridSystem.CanStepTo(floor, fx, fy, dx, dy)` 공용 헬퍼로 뽑아서 `TryMovePlayer`와 `BattleUI.RepaintGridTiles` 양쪽이 같은 기준을 쓰게 함.
+
+**검증**: 5건 전부 배치모드 컴파일 에러 0 확인(2회 재확인). **Play 모드 실제 동작은 미검증** — 특히 접촉 조우 시 밀려난 적 위치, 좁은 코너에서의 대각선 이동/타일 하이라이트 일치 여부는 9/9 항목의 기존 체크리스트(4번 도주 무한루프 등)에 반드시 같이 넣어서 확인할 것.
+
 > **게임이 완성됐으면 이 파일 삭제해라.**

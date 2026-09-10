@@ -112,6 +112,12 @@ public class DungeonManager : MonoBehaviour
             enemyList.Add(e);
         }
 
+        // 플레이어가 적 타일로 직접 걸어 들어가 조우한 경우, 그 적의 좌표가 플레이어 좌표와
+        // 겹친 채로 전투가 시작된다 - 배틀 그리드는 한 칸에 하나만 있다고 가정하므로(BattleGridSystem.
+        // TryMovePlayer의 occupant 체크, BattleUI의 isPlayer→occupant=null 렌더링) 겹친 적을
+        // 인접한 빈 칸으로 밀어내야 그리드에 보이고 타겟팅도 된다.
+        ResolvePlayerTileOverlap(enemyList);
+
         // 4단계 - 이동/도주 경계는 homeRoom 사각형이 아니라 "실제 접촉 위치를 포함하도록 넓힌" 경계를 쓴다.
         // Chasing 상태의 적은 EnemyAiSystem이 맵 전체를 BFS로 쫓아오게 하므로, 홈룸 밖(복도 등)에서
         // 접촉하는 경우가 흔하다 - homeRoom을 그대로 쓰면 그 순간 이미 "방 밖"이라 첫 이동에 오작동 도주가 나거나
@@ -121,6 +127,53 @@ public class DungeonManager : MonoBehaviour
         BattleManager.Instance.StartBattle(Player, enemyList, CurrentFloor, battleBounds);
         TransitionTo(GameState.Battle);
     }
+
+    // enemyList 중 플레이어와 같은 칸에 있는 적(직접 접촉 조우)을 인접한 빈 칸으로 밀어낸다.
+    // 4방향을 먼저 시도하고(대각선 벽 모서리를 새로 파고들지 않도록), 막혀 있으면 대각선 →
+    // 반경을 넓혀가며 첫 번째로 걸을 수 있는 빈 칸을 찾는다.
+    private void ResolvePlayerTileOverlap(List<Enemy> enemyList)
+    {
+        int px = CurrentFloor.PlayerX, py = CurrentFloor.PlayerY;
+        foreach (Enemy e in enemyList)
+        {
+            if (e.x != px || e.y != py) continue;
+
+            (int dx, int dy)? found = FindNearestFreeTile(px, py, enemyList);
+            if (found.HasValue)
+            {
+                e.x = px + found.Value.dx;
+                e.y = py + found.Value.dy;
+            }
+            else
+            {
+                Debug.LogWarning($"[DungeonManager] 접촉한 적을 플레이어 칸({px},{py})에서 밀어낼 빈 칸을 못 찾음 - 겹친 채로 전투 시작");
+            }
+        }
+    }
+
+    private (int dx, int dy)? FindNearestFreeTile(int px, int py, List<Enemy> enemyList)
+    {
+        (int dx, int dy)[] fourWay = { (0, -1), (0, 1), (-1, 0), (1, 0) };
+        (int dx, int dy)[] diagonal = { (-1, -1), (1, -1), (-1, 1), (1, 1) };
+
+        foreach (var d in fourWay) if (IsFreeTile(px + d.dx, py + d.dy, enemyList)) return d;
+        foreach (var d in diagonal) if (IsFreeTile(px + d.dx, py + d.dy, enemyList)) return d;
+
+        // 반경은 BuildBattleBounds의 패딩(2칸)을 넘으면 안 된다 - 그 밖으로 밀어내면
+        // BattleGridSystem.BfsPath가 room.Contains 필터에 막혀 해당 적이 영구히 접근을 못 한다.
+        const int radius = 2;
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                if (System.Math.Max(System.Math.Abs(dx), System.Math.Abs(dy)) != radius) continue;
+                if (IsFreeTile(px + dx, py + dy, enemyList)) return (dx, dy);
+            }
+
+        return null; // 못 찾음 - 극히 드문 케이스(반경 2칸, 24칸이 전부 벽/적) - 겹친 채로 전투 시작(플레이어 칸은 항상 battleBounds 안이라 경계 밖 폴백보다 안전)
+    }
+
+    private bool IsFreeTile(int x, int y, List<Enemy> enemyList) =>
+        CurrentFloor.IsWalkable(x, y) && !enemyList.Any(e => e.x == x && e.y == y);
 
     // homeRoom 사각형 + 플레이어/적들의 실제 좌표를 전부 포함하도록 확장한 뒤 여유 패딩을 준 경계.
     // Contains()가 벽 칸까지 true를 반환해도 무해하다 - BattleGridSystem은 어차피 IsWalkable로 한 번 더 거른다.
