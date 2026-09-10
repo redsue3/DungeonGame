@@ -613,4 +613,34 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 - 맵/마커 UI 다듬기 (7/8 "미해결 UI 피드백" 참고, 아직 미착수).
 - 실제 플레이 손맛 확인: 적별 골드 보상 체감, 집단전 타겟 클릭, 코스트 소진 자동 턴종료 (7/14부터 계속 미룸).
 
+---
+
+## Unity 검증 1~7 시도 — 1~3 배치모드 통과, 4단계 자동화는 실패로 보류 (2026-09-10)
+
+**환경**: 이 PC엔 Unity 6000.6.0f1만 설치돼 있고 프로젝트도 이미 이 버전으로 올라가 있어서, 배치모드로 1~3단계를 직접 실행해볼 수 있었음.
+
+**1~3단계 — 배치모드로 전부 통과**:
+- 컴파일: `error CS` 0건, exit 0 (스크립트 866개, 컴파일 1.1초).
+- `DungeonGame > 씬 자동 세팅`: "완전히 연결된 씬 세팅 완료!" 로그 확인, exit 0.
+- `DungeonGame > 한글 폰트 정적 베이크`: "NotoSansKR SDF Static.asset로 폴백 교체됨" 로그 확인, exit 0.
+- 즉 저번에 걱정했던 `SceneSetup.cs`의 `Bind()` 리플렉션 필드명 오타 같은 컴파일/씬 구성 문제는 없음.
+
+**4~7단계 — 자동 플레이테스트 시도, 실패**:
+- `Assets/Scripts/Editor/PlaytestRunner.cs`(임시, 확인 후 삭제 예정 — 이 세션 시작 시점에 이미 존재했음, 아마 오전에 끊긴 세션의 산물)로 `DungeonManager`/`BattleManager` API를 직접 호출해 맵 로밍→전투→도주(무한루프 워치독 포함)→복도 추격까지 자동으로 몰아붙이는 스크립트를 실행 시도.
+- `-batchmode -nographics -executeMethod PlaytestRunner.Run`으로 실행했는데 `EditorApplication.EnterPlaymode()` 호출 이후 **9분간 로그가 전혀 진행 안 되고**(`[PLAYTEST]` 태그 한 줄도 안 찍힘) CPU만 계속 오르는 채로 멈춰서 강제 종료(`taskkill /F`)함.
+- 로그 마지막에 `UnityEditor.Search.SearchInit.IndexationOnStartup()`에서 난 `ArgumentOutOfRangeException`이 있었음(우리 게임 코드와 무관한 Unity 내부 Search 인덱서 문제) — 이게 `EditorApplication.delayCall` 큐를 막아서 `Bootstrap()` 재시도 콜백이 영영 못 돌았을 가능성이 있으나 확정은 못함.
+- **결국 4단계(전투 그리드 통합) 실제 동작은 이번에도 검증 못함.** 자동화는 포기하고 다음엔 Unity 에디터를 직접 열어서 수동으로 확인하기로 함.
+
+**집에서(다음 세션) 할 일 — Unity 에디터 직접 열어서 수동 검증**:
+1. Unity Hub에서 `DungeonGame` 프로젝트 열기 (6000.6.0f1). 강제종료 직후라 "프로젝트가 이미 열려있음" 류 경고가 뜰 수 있는데 무시하고 진행.
+2. 콘솔에 컴파일 에러 없는지 육안 확인.
+3. Play 버튼 → 전투 진입 → 그리드가 보이는지, 인접 칸 클릭/WASD로 실제로 이동되는지 확인.
+4. 방 밖으로 나가서 **도주** 시도 — **이때 에디터가 멈추는지가 제일 중요** (멈추면 `BattleManager.BattleLoop`의 `state != Fled` 조건 관련 버그, 9/9 항목 참고). 멈추면 강제 종료하기 전에 Unity 콘솔/Stack Trace부터 확인.
+5. 도주 시 인접했던 적의 "이탈 공격" 발동 확인, 마법사 화염구를 사거리 밖에서 눌러 버튼이 비활성화되는지, 적이 멀리 있을 때 공격 대신 접근만 하는지 확인.
+6. 복도에서 쫓아오던 적에게 붙잡혀 전투가 시작되는 경우(집단조우 포함)도 테스트 — `BuildBattleBounds`가 방 밖 접촉을 잘 처리하는지.
+7. 레이아웃(그리드/적 패널 좌우 배치)이 겹치거나 잘리면 `SceneSetup.BuildBattlePanel`의 `Anchor()` 좌표 조정.
+8. 위 확인이 다 끝나면 `Assets/Scripts/Editor/PlaytestRunner.cs` 삭제 (문제 재현용으로 더 필요하면 남겨둬도 됨).
+
+**참고**: 이번 세션에서 만든 임시 배치모드 로그 파일(`compile_check.log`/`scene_setup.log`/`font_bake.log`/`playtest.log`, 프로젝트 루트)은 검증용이라 지워도 무방.
+
 > **게임이 완성됐으면 이 파일 삭제해라.**
