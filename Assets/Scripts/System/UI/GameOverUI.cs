@@ -16,7 +16,7 @@ public class GameOverUI : MonoBehaviour
 
         var p = DungeonManager.Instance?.Player;
         if (p != null)
-            summaryText.text = $"{p.characterName}  전사\n골드 {p.gold}  계층 {DungeonManager.Instance.CurrentLayer}";
+            summaryText.text = $"{p.characterName}\n골드 {p.gold}  계층 {DungeonManager.Instance.CurrentLayer}";
     }
 
     void OnDisable()

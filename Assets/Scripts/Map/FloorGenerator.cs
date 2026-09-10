@@ -252,9 +252,9 @@ public static class FloorGenerator
 
     private static string PickNormal(int layer)
     {
-        string[] pool = layer <= 1 ? new[] { "slime", "thief" }
-                      : layer == 2 ? new[] { "orc", "poison_spider" }
-                      :              new[] { "cursed_warrior", "shadow_witch" };
+        string[] pool = layer <= 1 ? new[] { "slime", "thief", "bat_swarm", "goblin_scout", "skeleton_soldier" }
+                      : layer == 2 ? new[] { "orc", "poison_spider", "orc_grunt", "swamp_viper", "bandit_raider" }
+                      :              new[] { "cursed_warrior", "shadow_witch", "bone_golem", "wraith", "fallen_knight" };
         return pool[Random.Range(0, pool.Length)];
     }
 

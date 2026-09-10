@@ -544,6 +544,35 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 
 ---
 
+## 2026-09-02 PR 3종 검증 + 몬스터 도감 로더 추가 (2026-09-03 세션)
+
+**배경**: 7/14 이후 이 파일 갱신 없이 한 달 반 붕 떴다가, 9/2에 로컬 작업이 devlog 대신 **GitHub PR 3개**로 올라와 있는 걸 발견 (`redsue3/DungeonGame`, 전부 미병합 상태):
+- PR #1 `fix/diagonal-move-gameover-label` — 던전맵 클릭 이동의 대각선 인접 판정 제거(4방향만 허용, 적 추적 BFS/키보드 이동과 통일) + 게임오버 화면에 직업 무관 "전사"가 하드코딩돼 있던 오표기 수정.
+- PR #2 `docs/worldbook-and-bestiary` — `worldbook.md`(세계관 "황금 곳간" 설정, 캐릭터 4명 배경) + `bestiary.md`(몬스터 22종 개별 설정, 헤더 id가 `EnemyDatabase.cs` 키와 1:1 대응하도록 설계) 신규. 순수 문서, 코드 변경 없음.
+- PR #3 `feature/monster-roster-and-map-colors` — `EnemyData`에 `phases[]`(페이즈별 hpThreshold+패턴) 추가해서 보스 3종을 100%/66%/33% HP 3페이즈로 재구성, 층당 일반 몬스터 2종→5종(9종 신규), `DungeonMapUI` 바닥색을 계층별로 분리(1층 청회색/2층 흙빛/3층 자주빛). **PR 본문에 스스로 "미검증 상태로 올림"이라고 표시**하고 컴파일/플레이 확인 체크박스가 전부 비어 있었음.
+
+**오늘 한 일 (검증)**:
+- PR3 코드 리뷰 — `Enemy.CheckPhaseTransition()`(while 루프로 여러 단계 동시 스킵 가능, `OnTurnStart`에서 `ProcessStatusEffects` 다음에 실행) 타이밍/경계값(0.66/0.33 임계값 부등호 방향) 확인, `EnemyFactory`/`FloorGenerator`/`DungeonMapUI` 변경분에 예전 `AddAction`/`data.pattern` API 잔재가 없는지 전수 검색 — 문제 없음.
+- PR1 + PR2 + PR3를 로컬에서 순서대로 병합 테스트 — 셋 다 `DungeonMapUI.cs`를 건드리지만 겹치는 줄이 없어 **충돌 없이 자동 병합됨** (PR1의 4방향 판정 + PR3의 계층별 색상이 한 파일에 공존 확인).
+- PR2 자신의 체크리스트("PR3 머지 후 `bestiary.md`의 id 22개가 `EnemyDatabase.cs` 키와 정확히 일치하는지 확인")를 병합된 상태에서 실행 — **22/22 정확히 일치, 누락/잉여 0건**.
+- **한계**: 이 환경엔 Unity 배치모드 라이선스가 없어서(`No valid Unity Editor license found`) 7/13~7/14 세션처럼 실제 배치모드 컴파일·플레이스루 검증은 못 했음. 위 검증은 전부 코드 정독 + 로직 재현(아래 참고) 기반의 정적 확인. **다음에 Unity를 직접 열 때 컴파일 에러 0 확인 + PR3 테스트플랜 3항목(잡몹 5종 스폰/페이즈 전환 로그/계층별 바닥색) 실제 플레이 확인 필요.**
+
+**오늘 한 일 (추가) — `MonsterLoreDatabase`**: worldbook.md/bestiary.md 둘 다 자체적으로 "나중에 인게임 도감 UI 만들 때 bestiary.md 파싱해서 MonsterLoreDatabase 같은 걸로 로드" 라고 명시해둔 다음 단계라 이번에 착수.
+- `Assets/Scripts/Database/MonsterLoreDatabase.cs` 신규 — `bestiary.md`를 라인 파싱(`### 표시이름 (id)` 헤더 + `- 계층/분류/등급/설정:` 필드)해서 `Dictionary<string, MonsterLore>`로 적재, `Get(id)`/`TryGet(id)` 제공. 다른 Database 클래스(`EnemyDatabase` 등)와 동일한 정적 클래스 + `Get()` 스타일로 맞춤.
+- **`bestiary.md`를 repo 루트에서 `Assets/StreamingAssets/bestiary.md`로 이동**: Unity는 `Assets/` 밖 파일을 빌드에 포함하지 않아서(반면 `StreamingAssets`는 원본 그대로 포함) PR2가 만든 위치 그대로는 런타임에 절대 못 읽는 상태였음 — 도감 로더를 실제로 동작시키려면 필수적인 이동. `worldbook.md`/`devlog.md`는 코드가 읽지 않는 순수 설계 문서라 루트에 그대로 둠.
+- **검증**: 이 환경엔 C# 컴파일러가 없어서(csc.exe 둘 다 의존성 문제로 실행 안 됨) 파싱 로직을 Python으로 1:1 재현해 실제 `bestiary.md`로 실행 — 22종 전부 필드 정상 채워짐, `EnemyDatabase` id와 누락/잉여 0건. C# 코드 자체의 문법 컴파일은 Unity 열 때 확인 필요(위 "한계" 항목과 동일 사유).
+- 아직 이 로더를 실제로 소비하는 인게임 UI(몬스터 조우 시 언락, 목록/상세 패널)는 없음 — worldbook.md에 적힌 대로 그건 별도 후속 작업.
+
+**Git 상태 (당시)**: 로컬 `integration-test` 브랜치에 PR1+PR2+PR3 병합 + 위 신규 커밋을 올려뒀고, 그때는 origin에 push도 PR 병합도 안 한 상태로 남겨둠. → **2026-09-10에 master로 병합 완료** (아래 "PR 통합본(integration-test) master 병합" 항목 참고). 그 사이(9/5~9/9) master는 이 브랜치를 전혀 모른 채 4단계(전투 그리드 통합)로 먼저 진행돼 있었어서, 병합 시 `Enemy.cs`(이 세션의 `phases[]` vs 4단계의 `x,y,spawnId` — 둘 다 살림)와 `devlog.md`(이 섹션의 시간순 재배치)에서 충돌 해소가 필요했음.
+
+**다음에 이어서 할 것 (당시 기준)**
+- Unity 열어서 컴파일 확인 + PR3 테스트플랜 3항목 실제 플레이 검증.
+- PR 3개 병합 순서/방식 결정 (구두로 이미 검증됐지만 최종 승인은 필요).
+- 몬스터 도감 인게임 UI (MonsterLoreDatabase 소비하는 쪽) — 아직 미착수.
+- 기존에 밀려있던 4단계(전투 그리드 통합)/맵 UI 다듬기/손맛 확인은 여전히 미착수.
+
+---
+
 ## 4단계 — 전투를 그리드 위로 통합 (2026-09-09, ⚠️ Unity 미검증)
 
 **배경**: 이 세션은 완전히 새 PC에서 시작 — Unity 에디터가 설치 안 된 상태로 시작해서, 아래 구현은 전부
@@ -660,4 +689,25 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 
 **검증**: 5건 전부 배치모드 컴파일 에러 0 확인(2회 재확인). **Play 모드 실제 동작은 미검증** — 특히 접촉 조우 시 밀려난 적 위치, 좁은 코너에서의 대각선 이동/타일 하이라이트 일치 여부는 9/9 항목의 기존 체크리스트(4번 도주 무한루프 등)에 반드시 같이 넣어서 확인할 것.
 
-> **게임이 완성됐으면 이 파일 삭제해라.**
+---
+
+## 전체 브랜치 조사 + 로드맵 수립 + PR 통합본(integration-test) master 병합 (2026-09-10)
+
+**배경**: `git branch -a`로 원격에 master 말고도 7개 브랜치가 더 있는 걸 발견 — 9/3 세션(바로 위 항목)이 만든 `integration-test`(PR1+PR2+PR3 통합본)가 끝내 master에 병합되지 않은 채 방치돼 있었고, 그 사이 master는 7/14(`7ad21d1`)에서 곧장 9/9 4단계로 건너뛰어버려서 두 라인이 갈라진 상태였음. 추가로 `노트북-로컬` 브랜치엔 devlog 3단계(맵카드)와는 다른 설계의 경쟁 "3단계"(`ExplorationCostSystem.cs` 기반 탐사 코스트+기습+부서지는 벽)가, `본체-로컬`엔 코드 변경 없는 상태 스냅샷 html 1개가 있었음.
+
+**전체 조사 결론**:
+- **`노트북-로컬`의 경쟁 3단계는 병합 보류** — master 3단계(코스트를 맵/전투 공용 자원으로)를 4단계가 그대로 전제하고 있어서(전투 첫 턴은 맵에서 들고 온 코스트로 시작), 자원을 아예 분리하는 노트북 설계를 그대로 얹으면 4단계 설계가 무너짐. "기습"/"부서지는 벽" 아이디어 자체는 나중에 master의 단일 코스트 자원 위에 재설계해서 살릴 수 있음 — 폐기 아님, 보류.
+- **`integration-test`(PR1+PR2+PR3)는 병합 진행** — `Enemy.cs`에서만 master(4단계, `x/y/spawnId`)와 겹치는데 서로 다른 필드/메서드 영역이라 충돌이 작고, `FloorGenerator.cs`/`DungeonMapUI.cs`는 master 4단계가 아예 손대지 않은 파일이라 저위험 판단.
+- **본체-로컬**은 코드 변경이 없어 병합 대상 아님(참고 문서로만 남김).
+
+**병합 작업**:
+- `git merge --no-commit --no-ff origin/integration-test` — 예상대로 `Enemy.cs`, `devlog.md` 2개만 충돌, 나머지(`EnemyData.cs`/`EnemyDatabase.cs`/`EnemyFactory.cs`/`FloorGenerator.cs`/`DungeonMapUI.cs`/`GameOverUI.cs` + 신규 `MonsterLoreDatabase.cs`/`bestiary.md`/`worldbook.md`/`CLEANUP.md`)는 자동 병합됨.
+- `Enemy.cs` 충돌 해소: master의 `x, y, spawnId`(4단계, 전투 그리드 좌표)와 `integration-test`의 `phases`/`currentPhaseIndex`(보스 페이즈제)를 **둘 다 유지** — 서로 다른 관심사라 공존 가능.
+- `devlog.md` 충돌 해소: 9/3 세션 기록이 시간순으로 9/9(4단계) 이전에 오도록 재배치.
+
+**아직 안 한 것 (다음에 할 일)**:
+- 병합 결과 Unity 배치모드 컴파일 확인 — **이 항목 작성 직후에 실행 예정, 아래 이어서 기록**.
+- PR3 자체 테스트플랜(잡몹 5종 스폰/페이즈 전환 로그/계층별 바닥색) + 몬스터 도감 UI는 여전히 미착수 (9/3 세션이 이미 남긴 숙제, 이번 병합으로도 안 풀림).
+- **대각선 이동 비대칭 미해결 이슈**: `fix/diagonal-move-gameover-label`(PR1, 9/2)은 "적 추적 BFS가 4방향뿐이라 대각선을 허용하면 적이 못 쫓아오는 도주 경로가 생긴다"는 근거로 오버월드 대각선을 완전히 제거했음. 반면 오늘 세션 앞서 4단계 전투 그리드에는 같은 문제(코너컷)를 막기만 하고 대각선 자체는 유지했는데, `BattleGridSystem.StepEnemyToward`의 접근 BFS도 똑같이 4방향뿐이라 이론상 같은 종류의 구멍이 전투 그리드에도 남아있을 수 있음. 4단계 devlog는 "사거리 카드로 키이팅"을 목적으로 명시했지만, 이게 "의도된 설계"인지 "PR1이 이미 한 번 고친 것과 같은 결함"인지는 아직 판단을 안 함 — 다음 Unity 수동 검증(9/9 체크리스트) 때 전투 그리드에서 적이 대각선 방향으로만 도주 가능한 경로가 실제로 존재하는지 직접 확인하고 필요하면 PR1과 같은 방식(대각선 완전 제거)으로 통일할지 결정할 것.
+
+> **게임이 완성됐으면 이 파일 삭제해라.** (전체 정리 체크리스트는 `CLEANUP.md` 참고 — 이 파일 말고도 지워야 할 게 있음)

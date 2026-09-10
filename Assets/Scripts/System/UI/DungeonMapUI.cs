@@ -58,8 +58,22 @@ public class DungeonMapUI : MonoBehaviour
         [TileType.Shrine]      = new Color(0.6f, 0.5f, 1f),
     };
 
-    private static readonly Color FloorVisibleColor = new Color(0.32f, 0.32f, 0.38f);
-    private static readonly Color FloorDimColor      = new Color(0.16f, 0.16f, 0.2f);
+    // 계층별 바닥 색 팔레트 - 1계층(곳간 입구, 청회색 돌바닥) → 2계층(오크 거점, 흙빛)
+    // → 3계층(곳간 심부, 저주받은 자주빛)으로 내려갈수록 톤이 바뀌게 해서 흑백 하나로
+    // 퉁친 던전처럼 안 보이게 한다 (worldbook.md 계층 설정과 맞춤).
+    private static readonly Dictionary<int, (Color visible, Color dim)> floorPalette =
+        new Dictionary<int, (Color visible, Color dim)>
+    {
+        [1] = (new Color(0.30f, 0.36f, 0.46f), new Color(0.14f, 0.17f, 0.23f)), // 청회색 돌바닥
+        [2] = (new Color(0.42f, 0.34f, 0.22f), new Color(0.20f, 0.16f, 0.10f)), // 흙빛
+        [3] = (new Color(0.38f, 0.22f, 0.30f), new Color(0.18f, 0.10f, 0.14f)), // 저주받은 자주빛
+    };
+    private static readonly (Color visible, Color dim) DefaultFloorPalette =
+        (new Color(0.32f, 0.32f, 0.38f), new Color(0.16f, 0.16f, 0.2f)); // 팔레트에 없는 계층 대비 기본값
+
+    private static (Color visible, Color dim) GetFloorPalette(int layer) =>
+        floorPalette.TryGetValue(layer, out var p) ? p : DefaultFloorPalette;
+
     private static readonly Color PlayerColor        = new Color(0.2f, 0.6f, 1f);
     private static readonly Color EnemyIdleColor     = new Color(0.6f, 0.55f, 0.2f);
     private static readonly Color EnemyChaseColor    = new Color(1f, 0.25f, 0.2f);
@@ -192,6 +206,8 @@ public class DungeonMapUI : MonoBehaviour
         playerRt.anchoredPosition = Vector2.zero;
         playerRt.sizeDelta = new Vector2(TileSize, TileSize);
 
+        var (floorVisible, floorDim) = GetFloorPalette(floor.Layer);
+
         foreach (var kv in floorTileObjects)
         {
             int x = kv.Key.Item1, y = kv.Key.Item2;
@@ -219,12 +235,14 @@ public class DungeonMapUI : MonoBehaviour
             }
             else
             {
-                img.color = visible ? FloorVisibleColor : FloorDimColor;
+                img.color = visible ? floorVisible : floorDim;
                 lbl.text  = "";
             }
 
-            bool isAdjacent = System.Math.Abs(x - px) + System.Math.Abs(y - py) == 1 ||
-                               (System.Math.Abs(x - px) == 1 && System.Math.Abs(y - py) == 1);
+            // 4방향(상하좌우)만 인접으로 인정한다. 대각선까지 허용하면 벽 모서리를 가로질러
+            // 이동할 수 있게 되는데, 적 추적 BFS(EnemyAiSystem.BfsPath)와 키보드 이동은 둘 다
+            // 4방향뿐이라 클릭 이동만 대각선을 허용하면 적이 절대 따라올 수 없는 경로로 도주가 가능해진다.
+            bool isAdjacent = System.Math.Abs(x - px) + System.Math.Abs(y - py) == 1;
             btn.interactable = visible && isAdjacent;
             btn.onClick.RemoveAllListeners();
             if (btn.interactable)
