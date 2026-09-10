@@ -705,9 +705,11 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 - `Enemy.cs` 충돌 해소: master의 `x, y, spawnId`(4단계, 전투 그리드 좌표)와 `integration-test`의 `phases`/`currentPhaseIndex`(보스 페이즈제)를 **둘 다 유지** — 서로 다른 관심사라 공존 가능.
 - `devlog.md` 충돌 해소: 9/3 세션 기록이 시간순으로 9/9(4단계) 이전에 오도록 재배치.
 
+**완료**: 병합 결과 Unity 배치모드 컴파일 확인(에러 0) → 신규 에셋 `.meta` 3개(`MonsterLoreDatabase.cs.meta`/`StreamingAssets.meta`/`bestiary.md.meta`, integration-test에 애초에 없던 것 — Unity 라이선스 없는 환경에서 작성돼서 한 번도 임포트된 적이 없었음) 생성해서 커밋 → `origin/master`에 push 완료(`151f96e..c3bb290`).
+
 **아직 안 한 것 (다음에 할 일)**:
-- 병합 결과 Unity 배치모드 컴파일 확인 — **이 항목 작성 직후에 실행 예정, 아래 이어서 기록**.
 - PR3 자체 테스트플랜(잡몹 5종 스폰/페이즈 전환 로그/계층별 바닥색) + 몬스터 도감 UI는 여전히 미착수 (9/3 세션이 이미 남긴 숙제, 이번 병합으로도 안 풀림).
 - **대각선 이동 비대칭 미해결 이슈**: `fix/diagonal-move-gameover-label`(PR1, 9/2)은 "적 추적 BFS가 4방향뿐이라 대각선을 허용하면 적이 못 쫓아오는 도주 경로가 생긴다"는 근거로 오버월드 대각선을 완전히 제거했음. 반면 오늘 세션 앞서 4단계 전투 그리드에는 같은 문제(코너컷)를 막기만 하고 대각선 자체는 유지했는데, `BattleGridSystem.StepEnemyToward`의 접근 BFS도 똑같이 4방향뿐이라 이론상 같은 종류의 구멍이 전투 그리드에도 남아있을 수 있음. 4단계 devlog는 "사거리 카드로 키이팅"을 목적으로 명시했지만, 이게 "의도된 설계"인지 "PR1이 이미 한 번 고친 것과 같은 결함"인지는 아직 판단을 안 함 — 다음 Unity 수동 검증(9/9 체크리스트) 때 전투 그리드에서 적이 대각선 방향으로만 도주 가능한 경로가 실제로 존재하는지 직접 확인하고 필요하면 PR1과 같은 방식(대각선 완전 제거)으로 통일할지 결정할 것.
+- **브랜치 정리는 Play 모드 검증 끝난 뒤로 보류(사용자 결정, 2026-09-10)**: `CLEANUP.md` 3번 항목대로 병합에 쓰인 4개 브랜치(`fix/diagonal-move-gameover-label`/`docs/worldbook-and-bestiary`/`feature/monster-roster-and-map-colors`/`integration-test`)와 백업용 `checkpoint/before-pr-merge-20260903`을 삭제할 수 있는 상태지만, 병합 결과가 실제 플레이에서 안정적인지 아직 아무도 눈으로 확인 못 했으므로 급하게 지우지 않기로 함. **9/9 Unity 수동 검증 체크리스트(1~8번)를 전부 통과한 뒤에** 이 브랜치들 삭제 여부를 다시 물어볼 것.
 
 > **게임이 완성됐으면 이 파일 삭제해라.** (전체 정리 체크리스트는 `CLEANUP.md` 참고 — 이 파일 말고도 지워야 할 게 있음)
