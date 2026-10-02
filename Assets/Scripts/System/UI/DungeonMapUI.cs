@@ -28,6 +28,10 @@ public class DungeonMapUI : MonoBehaviour
     [SerializeField] private MapCardUI mapCardUI;
     [SerializeField] private Button    mapCardBtn;
 
+    [Header("몬스터 도감")]
+    [SerializeField] private BestiaryUI bestiaryUI;
+    [SerializeField] private Button     bestiaryBtn;
+
     private const float MinTileSize = 14f;
     private const float MaxTileSize = 48f;
     private const float DefaultTileSize = 26f;
@@ -89,6 +93,7 @@ public class DungeonMapUI : MonoBehaviour
         TileSize = PlayerPrefs.GetFloat(TileSizePrefKey, DefaultTileSize);
         inventoryBtn?.onClick.AddListener(() => inventoryUI?.Open());
         mapCardBtn?.onClick.AddListener(() => mapCardUI?.Open());
+        bestiaryBtn?.onClick.AddListener(() => bestiaryUI?.Open());
         Refresh();
     }
 
@@ -96,6 +101,7 @@ public class DungeonMapUI : MonoBehaviour
     {
         inventoryBtn?.onClick.RemoveAllListeners();
         mapCardBtn?.onClick.RemoveAllListeners();
+        bestiaryBtn?.onClick.RemoveAllListeners();
     }
 
     void Update()

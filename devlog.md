@@ -713,3 +713,33 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 - **브랜치 정리는 Play 모드 검증 끝난 뒤로 보류(사용자 결정, 2026-09-10)**: `CLEANUP.md` 3번 항목대로 병합에 쓰인 4개 브랜치(`fix/diagonal-move-gameover-label`/`docs/worldbook-and-bestiary`/`feature/monster-roster-and-map-colors`/`integration-test`)와 백업용 `checkpoint/before-pr-merge-20260903`을 삭제할 수 있는 상태지만, 병합 결과가 실제 플레이에서 안정적인지 아직 아무도 눈으로 확인 못 했으므로 급하게 지우지 않기로 함. **9/9 Unity 수동 검증 체크리스트(1~8번)를 전부 통과한 뒤에** 이 브랜치들 삭제 여부를 다시 물어볼 것.
 
 > **게임이 완성됐으면 이 파일 삭제해라.** (전체 정리 체크리스트는 `CLEANUP.md` 참고 — 이 파일 말고도 지워야 할 게 있음)
+
+---
+
+## 대각선 추적 8방향화 + 몬스터 도감 UI + 로직 검증 스크립트 (2026-10-02, ⚠️ Play 모드 미검증)
+
+**환경**: 이 PC에 Unity 6000.6.0f1을 새로 설치했지만 라이선스 미활성(`No valid Unity Editor license found`)이라 배치모드 실행 불가.
+대신 Unity 동봉 Roslyn(`DotNetSdk/.../csc.dll`)에 엔진·패키지 DLL을 직접 물려 런타임/에디터 스크립트 **둘 다 컴파일 에러 0** 확인.
+
+**대각선 이동 비대칭 — 결정: 적 추적을 8방향으로 (플레이어 대각선은 유지)**
+- 정적 분석: 플레이어는 8방향·턴당 1칸, 인접 판정은 체비쇼프인데 `BattleGridSystem.BfsPath`만 4방향이었음 →
+  플레이어가 대각선으로 물러나면 적이 2턴에 1칸씩 뒤처져서 근접 적은 넓은 방에서 영영 못 따라붙음 (PR1이 오버월드에서 고친 것과 같은 구멍).
+- `BfsPath`를 8방향으로 바꾸고 이동 판정은 플레이어와 같은 `CanStepTo`(코너컷 금지)를 쓰게 함. 직교 방향을 먼저 넣어 같은 거리면 직선 우선.
+- 사거리 카드 키이팅은 그대로 성립: 플레이어 1칸 후퇴 + 사거리 3 공격, 적은 1칸 접근 → 거리 유지. 대신 무한 도망은 안 됨.
+- 오버월드(`EnemyAiSystem`)는 플레이어도 4방향이라 손대지 않음.
+
+**몬스터 도감 UI (`BestiaryUI`)**
+- 던전맵 상단 '도감' 버튼 → 오버레이에서 이전/다음으로 한 마리씩. 아직 맞붙은 적 없는 몬스터는 계층만 보이고 나머지 ???.
+- 발견 기록: `DungeonManager.Engage`에서 전투 시작 시 `MonsterLoreDatabase.MarkDiscovered`. 런을 넘어 쌓이는 수집 요소라 PlayerPrefs(`bestiary.discovered`).
+- `MonsterLoreDatabase.All` — bestiary.md 순서 그대로의 목록 추가.
+- `SceneSetup.BuildBestiarySubPanel` 추가 → **씬 자동 세팅(DungeonGame 메뉴) 다시 돌려야 씬에 생김.**
+- `KoreanFontBaker`가 `Assets/Scripts`(Editor 제외)만 훑어서 bestiary.md 설정 문장의 글자가 아틀라스에 없었을 것 →
+  `StreamingAssets/*.md|*.txt`와 `Editor/SceneSetup.cs`(버튼 라벨)도 훑게 함. **폰트 정적 베이크 다시 돌릴 것.**
+
+**`Editor/LogicVerify.cs` — Play 모드 없이 도는 로직 검증 (PR3 테스트플랜 대체 일부)**
+- 메뉴 `DungeonGame/로직 검증 (Play 모드 없이)` 또는 `-executeMethod LogicVerify.RunBatch`.
+- 계층별 일반 몬스터 5종 실제 스폰(40층 생성) / 보스 페이즈 역행 없음·마지막 페이즈 도달 / 1~3계층 바닥색 서로 다름 /
+  도감 22종 = EnemyDatabase 키 / 대각선 2칸 적이 한 턴에 인접·대각선 후퇴에도 계속 따라붙음.
+
+**다음 Unity 세션 순서**: Unity Hub 로그인·라이선스 활성 → 프로젝트 열기(새 스크립트 .meta 생성, 커밋) → 씬 자동 세팅 → 폰트 베이크 →
+로직 검증 메뉴 → 9/9 수동 체크리스트 1~8 + 도감 버튼 눈으로 확인 → 통과하면 브랜치 정리·`PlaytestRunner.cs` 삭제.

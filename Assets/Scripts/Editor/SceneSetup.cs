@@ -360,6 +360,9 @@ public static class SceneSetup
         var inventoryBtn = Btn(topBar.transform, "InventoryBtn", "인벤토리", BtnYellow, out _);
         inventoryBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 150;
 
+        var bestiaryBtn = Btn(topBar.transform, "BestiaryBtn", "도감", BtnBlue, out _);
+        bestiaryBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 110;
+
         // 분기형 맵은 레이아웃 그룹 없이 DungeonMapUI가 층(floor)/가로위치(x) 기준으로
         // 노드와 연결선을 직접 배치한다 (그리드로 고정하지 않음).
         GameObject gridArea = NewGO("GridArea", panel.transform);
@@ -382,6 +385,10 @@ public static class SceneSetup
 
         GameObject mapCardPanel = BuildMapCardSubPanel(panel.transform, cardPrefab);
         Bind(ui, "mapCardUI", mapCardPanel.GetComponent<MapCardUI>());
+
+        GameObject bestiaryPanel = BuildBestiarySubPanel(panel.transform);
+        Bind(ui, "bestiaryUI", bestiaryPanel.GetComponent<BestiaryUI>());
+        Bind(ui, "bestiaryBtn", bestiaryBtn);
 
         return panel;
     }
@@ -426,6 +433,53 @@ public static class SceneSetup
         Bind(ui, "hungerBarFill", hungerFill);
         Bind(ui, "itemParent", listArea.transform);
         Bind(ui, "itemPrefab", foodItemPrefab);
+        Bind(ui, "panelRoot", root);
+        Bind(ui, "closeBtn", closeBtn);
+
+        root.SetActive(false);
+        return root;
+    }
+
+    // 몬스터 도감 오버레이 (BestiaryUI) - 한 마리씩 이전·다음으로 넘겨 본다
+    private static GameObject BuildBestiarySubPanel(Transform mapPanel)
+    {
+        GameObject root = NewGO("BestiaryOverlay", mapPanel);
+        StretchFull(root.GetComponent<RectTransform>());
+        root.AddComponent<Image>().color = new Color(0, 0, 0, 0.7f);
+
+        GameObject box = NewGO("Box", root.transform);
+        Anchor(box.GetComponent<RectTransform>(), new Vector2(0.25f, 0.15f), new Vector2(0.75f, 0.85f), Vector2.zero, Vector2.zero);
+        box.AddComponent<Image>().color = PanelBg;
+
+        var title = Text(box.transform, "Title", "몬스터 도감", 28, TextAlignmentOptions.Center, TextWhite);
+        Anchor(title.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -60), new Vector2(0, -14));
+
+        var pageText = Text(box.transform, "PageText", "1 / 22", 16, TextAlignmentOptions.Center, TextDim);
+        Anchor(pageText.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -88), new Vector2(0, -62));
+
+        var nameText = Text(box.transform, "NameText", "???", 32, TextAlignmentOptions.Center, TextWhite);
+        Anchor(nameText.rectTransform, new Vector2(0.05f, 1), new Vector2(0.95f, 1), new Vector2(0, -140), new Vector2(0, -96));
+
+        var infoText = Text(box.transform, "InfoText", "", 18, TextAlignmentOptions.Center, new Color(0.6f, 0.8f, 1f));
+        Anchor(infoText.rectTransform, new Vector2(0.05f, 1), new Vector2(0.95f, 1), new Vector2(0, -172), new Vector2(0, -144));
+
+        var descText = Text(box.transform, "DescText", "", 18, TextAlignmentOptions.TopLeft, TextWhite);
+        Anchor(descText.rectTransform, new Vector2(0.08f, 0.14f), new Vector2(0.92f, 1), Vector2.zero, new Vector2(0, -186));
+
+        var prevBtn = Btn(box.transform, "PrevBtn", "이전", BtnBlue, out _);
+        Anchor(prevBtn.GetComponent<RectTransform>(), new Vector2(0.05f, 0.02f), new Vector2(0.25f, 0.1f), Vector2.zero, Vector2.zero);
+        var closeBtn = Btn(box.transform, "CloseBtn", "닫기", BtnRed, out _);
+        Anchor(closeBtn.GetComponent<RectTransform>(), new Vector2(0.35f, 0.02f), new Vector2(0.65f, 0.1f), Vector2.zero, Vector2.zero);
+        var nextBtn = Btn(box.transform, "NextBtn", "다음", BtnBlue, out _);
+        Anchor(nextBtn.GetComponent<RectTransform>(), new Vector2(0.75f, 0.02f), new Vector2(0.95f, 0.1f), Vector2.zero, Vector2.zero);
+
+        var ui = root.AddComponent<BestiaryUI>();
+        Bind(ui, "pageText", pageText);
+        Bind(ui, "nameText", nameText);
+        Bind(ui, "infoText", infoText);
+        Bind(ui, "descText", descText);
+        Bind(ui, "prevBtn", prevBtn);
+        Bind(ui, "nextBtn", nextBtn);
         Bind(ui, "panelRoot", root);
         Bind(ui, "closeBtn", closeBtn);
 

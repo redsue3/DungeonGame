@@ -25,7 +25,7 @@ public static class KoreanFontBaker
     public static void Bake()
     {
         string characters = CollectKoreanCharacters();
-        Debug.Log($"[KoreanFontBaker] Assets/Scripts에서 한글 {characters.Length}자 수집");
+        Debug.Log($"[KoreanFontBaker] Assets/Scripts·StreamingAssets에서 한글 {characters.Length}자 수집");
 
         var sourceFont = AssetDatabase.LoadAssetAtPath<Font>(SourceFontPath);
         if (sourceFont == null)
@@ -129,13 +129,24 @@ public static class KoreanFontBaker
     private static string CollectKoreanCharacters()
     {
         var unique = new System.Collections.Generic.HashSet<char>();
-        string[] guids = AssetDatabase.FindAssets("t:Script", new[] { "Assets/Scripts" });
-
-        foreach (string guid in guids)
+        var paths = new System.Collections.Generic.List<string>();
+        foreach (string guid in AssetDatabase.FindAssets("t:Script", new[] { "Assets/Scripts" }))
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
-            if (path.Contains("/Editor/")) continue; // 에디터 툴 소스는 실제 게임 텍스트가 아님
+            // 에디터 툴 소스는 실제 게임 텍스트가 아님 - 단 SceneSetup은 버튼/제목 라벨을 직접 박아 넣으므로 포함
+            if (path.Contains("/Editor/") && !path.EndsWith("/SceneSetup.cs")) continue;
+            paths.Add(path);
+        }
+        // 런타임에 읽어서 화면에 띄우는 텍스트 데이터 (몬스터 도감 bestiary.md 등)
+        string streaming = "Assets/StreamingAssets";
+        if (System.IO.Directory.Exists(streaming))
+        {
+            paths.AddRange(System.IO.Directory.GetFiles(streaming, "*.md", System.IO.SearchOption.AllDirectories));
+            paths.AddRange(System.IO.Directory.GetFiles(streaming, "*.txt", System.IO.SearchOption.AllDirectories));
+        }
 
+        foreach (string path in paths)
+        {
             string text = System.IO.File.ReadAllText(path);
             foreach (char c in text)
             {

@@ -67,7 +67,10 @@ public static class BattleGridSystem
         return false; // 이번 턴엔 접근만 함 (다음 턴에 인접 판정에서 공격 가능해짐)
     }
 
-    // 방 범위 안(+겹치지 않은 칸)으로 제한한 4방향 BFS 최단 경로.
+    // 방 범위 안(+겹치지 않은 칸)으로 제한한 8방향 BFS 최단 경로.
+    // 예전엔 4방향이었는데, 플레이어는 8방향으로 움직이고 인접 판정은 체비쇼프라서 플레이어가 대각선으로
+    // 물러나면 적이 2턴에 1칸씩 뒤처져 근접 적은 영영 못 따라붙었다(PR1이 오버월드에서 고친 것과 같은 구멍).
+    // 이동 규칙도 플레이어와 같은 CanStepTo(코너컷 금지)를 쓴다.
     private static List<(int x, int y)> BfsPath(DungeonFloor floor, RoomInfo room, int sx, int sy, int tx, int ty,
                                                   List<Enemy> allEnemies)
     {
@@ -79,18 +82,19 @@ public static class BattleGridSystem
         queue.Enqueue(start);
         parent[start] = start;
 
-        int[] ddx = { 0, 0, 1, -1 };
-        int[] ddy = { 1, -1, 0, 0 };
+        // 직교 방향을 먼저 넣어서, 같은 거리면 직선 경로를 우선한다.
+        int[] ddx = { 0, 0, 1, -1, 1, 1, -1, -1 };
+        int[] ddy = { 1, -1, 0, 0, 1, -1, 1, -1 };
 
         while (queue.Count > 0)
         {
             var cur = queue.Dequeue();
             if (cur == goal) break;
 
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < ddx.Length; i++)
             {
                 var next = (x: cur.x + ddx[i], y: cur.y + ddy[i]);
-                if (!floor.IsWalkable(next.x, next.y)) continue;
+                if (!CanStepTo(floor, cur.x, cur.y, ddx[i], ddy[i])) continue;
                 if (!room.Contains(next.x, next.y)) continue; // 전투 중엔 적이 방 밖으로 나가서 접근하지 않는다
                 if (parent.ContainsKey(next)) continue;
                 if (next != goal && allEnemies.Any(e => e.IsAlive && e.x == next.x && e.y == next.y)) continue;

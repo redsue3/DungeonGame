@@ -22,6 +22,39 @@ public static class MonsterLoreDatabase
     private const string FileName = "bestiary.md";
 
     private static Dictionary<string, MonsterLore> table;
+    private static List<MonsterLore> ordered; // bestiary.md에 적힌 순서 그대로 (도감 UI 넘김 순서)
+
+    // 도감 발견 기록. 런을 넘어 쌓이는 수집 요소라 세이브(런 단위)가 아니라 PlayerPrefs에 둔다.
+    private const string DiscoveredPrefKey = "bestiary.discovered";
+    private static HashSet<string> discovered;
+
+    public static IReadOnlyList<MonsterLore> All
+    {
+        get { EnsureLoaded(); return ordered; }
+    }
+
+    public static bool IsDiscovered(string id)
+    {
+        EnsureDiscoveredLoaded();
+        return discovered.Contains(id);
+    }
+
+    // 전투를 시작할 때 만난 적 id로 부른다. 새로 발견했으면 true.
+    public static bool MarkDiscovered(string id)
+    {
+        EnsureDiscoveredLoaded();
+        if (string.IsNullOrEmpty(id) || !discovered.Add(id)) return false;
+        PlayerPrefs.SetString(DiscoveredPrefKey, string.Join(",", discovered));
+        PlayerPrefs.Save();
+        return true;
+    }
+
+    private static void EnsureDiscoveredLoaded()
+    {
+        if (discovered != null) return;
+        string saved = PlayerPrefs.GetString(DiscoveredPrefKey, "");
+        discovered = new HashSet<string>(saved.Split(new[] { ',' }, System.StringSplitOptions.RemoveEmptyEntries));
+    }
 
     public static MonsterLore Get(string id)
     {
@@ -41,6 +74,7 @@ public static class MonsterLoreDatabase
     {
         if (table != null) return;
         table = new Dictionary<string, MonsterLore>();
+        ordered = new List<MonsterLore>();
 
         string path = Path.Combine(Application.streamingAssetsPath, FileName);
         if (!File.Exists(path))
@@ -49,7 +83,7 @@ public static class MonsterLoreDatabase
             return;
         }
 
-        Parse(File.ReadAllText(path), table);
+        Parse(File.ReadAllText(path), table, ordered);
     }
 
     // bestiary.md 형식 고정 파싱 (worldbook.md에서 설명하는 그 형식):
@@ -58,7 +92,7 @@ public static class MonsterLoreDatabase
     // - 분류: X
     // - 등급: Y
     // - 설정: 텍스트
-    private static void Parse(string text, Dictionary<string, MonsterLore> into)
+    private static void Parse(string text, Dictionary<string, MonsterLore> into, List<MonsterLore> inOrder)
     {
         MonsterLore current = null;
         foreach (string rawLine in text.Split('\n'))
@@ -68,7 +102,11 @@ public static class MonsterLoreDatabase
             if (line.StartsWith("### "))
             {
                 current = ParseHeader(line);
-                if (current != null) into[current.id] = current;
+                if (current != null && !into.ContainsKey(current.id))
+                {
+                    into[current.id] = current;
+                    inOrder.Add(current);
+                }
                 continue;
             }
             if (current == null) continue;

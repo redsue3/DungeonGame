@@ -104,6 +104,7 @@ public class DungeonManager : MonoBehaviour
         {
             Enemy e = EnemyFactory.Create(s.enemyTemplateId);
             if (e == null) continue;
+            MonsterLoreDatabase.MarkDiscovered(s.enemyTemplateId); // 도감: 한 번이라도 맞붙은 적은 설정이 열린다
             // 4단계 - 전투는 이 EnemySpawn이 서 있던 그리드 좌표에서 그대로 이어진다.
             // spawnId를 들고 있어야 도주 시 최종 위치를 다시 EnemySpawn에 되돌려줄 수 있다.
             e.spawnId = s.id;
