@@ -69,7 +69,7 @@ public static class BattleGridSystem
 
     // 방 범위 안(+겹치지 않은 칸)으로 제한한 8방향 BFS 최단 경로.
     // 예전엔 4방향이었는데, 플레이어는 8방향으로 움직이고 인접 판정은 체비쇼프라서 플레이어가 대각선으로
-    // 물러나면 적이 2턴에 1칸씩 뒤처져 근접 적은 영영 못 따라붙었다(PR1이 오버월드에서 고친 것과 같은 구멍).
+    // 물러나면 적과의 거리가 매 턴 벌어져 근접 적은 영영 못 따라붙었다(PR1이 오버월드에서 고친 것과 같은 구멍).
     // 이동 규칙도 플레이어와 같은 CanStepTo(코너컷 금지)를 쓴다.
     private static List<(int x, int y)> BfsPath(DungeonFloor floor, RoomInfo room, int sx, int sy, int tx, int ty,
                                                   List<Enemy> allEnemies)

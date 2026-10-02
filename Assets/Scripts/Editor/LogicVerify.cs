@@ -122,11 +122,17 @@ public static class LogicVerify
     // ── 5. 전투 그리드 대각선 추적 ─────────────────────────────────────
     private static void CheckDiagonalChase()
     {
-        Random.InitState(7);
-        DungeonFloor floor = FloorGenerator.Generate(1);
-        // 적(0,0) → 플레이어(2,2) → 대각선으로 (4,4)까지 물러날 수 있게 5x5 이상 방을 고른다
-        RoomInfo room = floor.Rooms.FirstOrDefault(r => r.w >= 5 && r.h >= 5);
-        if (room == null) { Check(false, "대각선 추적 검사용 5x5 이상 방이 있다"); return; }
+        // 적(0,0) → 플레이어(2,2) → 대각선으로 (4,4)까지 물러날 수 있게 5x5 방을 고른다.
+        // 방 크기는 3~5 랜덤이라 한 층에 5x5 방이 없을 수도 있어서, 나올 때까지 시드를 넘긴다.
+        DungeonFloor floor = null;
+        RoomInfo room = null;
+        for (int seed = 0; seed < 200 && room == null; seed++)
+        {
+            Random.InitState(7000 + seed);
+            floor = FloorGenerator.Generate(1);
+            room = floor.Rooms.FirstOrDefault(r => r.w >= 5 && r.h >= 5);
+        }
+        if (room == null) { Check(false, "대각선 추적 검사용 5x5 방을 200층 안에 찾음"); return; }
 
         int px = room.x + 2, py = room.y + 2;
         floor.PlayerX = px; floor.PlayerY = py;

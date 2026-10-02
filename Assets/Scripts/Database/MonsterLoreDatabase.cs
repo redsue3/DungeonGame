@@ -102,11 +102,15 @@ public static class MonsterLoreDatabase
             if (line.StartsWith("### "))
             {
                 current = ParseHeader(line);
-                if (current != null && !into.ContainsKey(current.id))
+                if (current == null) continue;
+                if (into.ContainsKey(current.id))
                 {
-                    into[current.id] = current;
-                    inOrder.Add(current);
+                    Debug.LogWarning($"MonsterLoreDatabase: id 중복 '{current.id}' - 처음 것만 씀");
+                    current = null; // 중복 항목의 필드가 앞 항목을 덮어쓰지 않게
+                    continue;
                 }
+                into[current.id] = current;
+                inOrder.Add(current);
                 continue;
             }
             if (current == null) continue;

@@ -93,7 +93,9 @@ public class DungeonMapUI : MonoBehaviour
         TileSize = PlayerPrefs.GetFloat(TileSizePrefKey, DefaultTileSize);
         inventoryBtn?.onClick.AddListener(() => inventoryUI?.Open());
         mapCardBtn?.onClick.AddListener(() => mapCardUI?.Open());
-        bestiaryBtn?.onClick.AddListener(() => bestiaryUI?.Open());
+        // 도감은 씬 자동 세팅을 다시 돌리기 전 씬에선 연결이 비어 있다. 에디터의 '가짜 null'은 ?. 로 못 걸러서
+        // 여기서 예외가 나면 아래 Refresh()까지 막혀 맵이 안 그려지므로 Unity 방식(!= null)으로 확인한다.
+        if (bestiaryBtn != null && bestiaryUI != null) bestiaryBtn.onClick.AddListener(bestiaryUI.Open);
         Refresh();
     }
 
@@ -101,7 +103,7 @@ public class DungeonMapUI : MonoBehaviour
     {
         inventoryBtn?.onClick.RemoveAllListeners();
         mapCardBtn?.onClick.RemoveAllListeners();
-        bestiaryBtn?.onClick.RemoveAllListeners();
+        if (bestiaryBtn != null) bestiaryBtn.onClick.RemoveAllListeners();
     }
 
     void Update()
