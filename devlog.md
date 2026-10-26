@@ -747,3 +747,20 @@ Boss: 마왕의 왕관(최대마나+1 + 전투시 힘+2)
 **같은 날 검수 후 보완**: 도감 버튼 연결을 `!= null`로(씬 재세팅 전 에디터 '가짜 null'에서 OnEnable 예외 → 맵 안 그려짐 방지),
 bestiary.md id 중복 시 경고 후 처음 것만, `LogicVerify` 대각선 검사는 5x5 방이 나올 때까지 시드를 넘김.
 8방향 추적은 파이썬으로 같은 알고리즘을 재현해 확인(대각선 2칸 → 1턴에 인접, 후퇴 내내 인접 유지, 코너컷 불가).
+
+## 전투 도주 무한루프 조사 + UIT301-6에서 Unity 배치 실행 검증 (2026-10-14)
+
+**도주 무한루프 — 결론: 게임 코드는 이미 안전, 멈춤의 원인은 임시 플레이테스트 스크립트**
+- `BattleManager.BattleLoop`의 while 조건에 `state != BattleState.Fled` 가드가 이미 있어서 도주 후 빈 루프는 재현되지 않음.
+- 9/10에 9분간 멈췄던 건 `PlaytestRunner`가 Play 모드 진입 시 도메인 리로드로 `EditorApplication.delayCall` 구독이 지워져
+  드라이버(`__PlaytestDriver`)가 아예 안 뜬 것 → `SessionState`에 실행 요청을 남기고 `[InitializeOnLoadMethod]` + `playModeStateChanged`로
+  리로드 뒤 다시 구독하게 수정.
+- 배치모드 오판정 3건도 수정: 새 Library의 에디터 검색 인덱싱(`UnityEditor.Search`) 내부 예외를 게임 오류로 잡던 것,
+  프레임 제한 없는 배치모드에서 적 턴 대기 중 프레임마다 행동 카운터가 올라 '500액션 초과'로 실패하던 것(플레이어 턴에만 셈),
+  성소 방 진입을 전투 조우로 착각하던 것(성소/휴식/상점/보상은 바로 나와서 계속 로밍).
+
+**UIT301-6(Unity 6000.6.0f1) 배치 실행** — 작업 폴더 `C:\work1\DungeonGame`, master 1cd93eb
+- Unity Hub 로그인·라이선스 활성 후 실행. 컴파일 에러 0, `LogicVerify` 24/24 통과.
+- 플레이테스트 4단계 전부 통과(`ALL_TESTS_PASSED`): 일반 전투 승리 → 재시작 후 재조우 → 도주 5턴 만에 맵 복귀(40초 워치독 안 걸림) → 도주 후 추격 재조우.
+- 대각선 이동 비대칭은 10/2 커밋(3a58d6c, 적 추적 8방향화)에서 이미 해결된 것 확인(`LogicVerify` 대각선 검사 통과).
+- 이날 수정한 `PlaytestRunner`와 빠져 있던 `LogicVerify.cs.meta`/`BestiaryUI.cs.meta`는 커밋하지 않고 두었다가 10/26 df09ac9에 함께 올림.
