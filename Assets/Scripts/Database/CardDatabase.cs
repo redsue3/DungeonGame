@@ -67,6 +67,13 @@ public static class CardDatabase
         ["adrenaline"]     = new Card("adrenaline",     "아드레날린",    1, CardType.Skill,   str: 1, draw: 1),
         ["second_wind"]    = new Card("second_wind",    "재정비",       1, CardType.Skill,   heal: 5),
         ["toughen"]        = new Card("toughen",        "담금질",       1, CardType.Skill,   str: 2),
+
+        // 직업별 0코스트 순환 카드 (2026-10-26 피드백) - 시작 덱에 1장씩. 가볍게 패를 돌리면서 직업 특성을 살린다.
+        // 전투 전용 - 0코스트라 맵에서 쓰면 무한 사용이 돼서 MapCardSystem이 막는다.
+        ["war_cry"]        = new Card("war_cry",        "기합",         0, CardType.Skill,   buffNextAttack: 3, draw: 1),       // 전사: 다음 공격 강화
+        ["quick_hands"]    = new Card("quick_hands",    "빠른 손놀림",   0, CardType.Attack,  dmg: 2, draw: 1),                  // 도적: 가볍게 많이
+        ["ember"]          = new Card("ember",          "불씨",         0, CardType.Attack,  burn: 2, draw: 1, range: 3),       // 마법사: 원거리 화상
+        ["short_prayer"]   = new Card("short_prayer",   "짧은 기도",     0, CardType.Skill,   heal: 2, draw: 1),                 // 성기사: 지속력
     };
 
     public static Card Create(string id)

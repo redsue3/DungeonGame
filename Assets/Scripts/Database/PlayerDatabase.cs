@@ -17,7 +17,8 @@ public static class PlayerDatabase
             {
                 "strike","strike","strike","strike","strike",
                 "defend","defend","defend","defend",
-                "heavy_strike"
+                "heavy_strike",
+                "war_cry"
             }
         },
 
@@ -33,7 +34,8 @@ public static class PlayerDatabase
             {
                 "dagger","dagger","dagger","dagger","dagger","dagger",
                 "evade","evade","evade",
-                "combo"
+                "combo",
+                "quick_hands"
             }
         },
 
@@ -50,7 +52,8 @@ public static class PlayerDatabase
                 "fireball","fireball","fireball","fireball",
                 "mana_shield","mana_shield","mana_shield",
                 "lightning",
-                "draw_spell"
+                "draw_spell",
+                "ember"
             }
         },
 
@@ -67,7 +70,8 @@ public static class PlayerDatabase
                 "holy_strike","holy_strike","holy_strike","holy_strike",
                 "shield_bash","shield_bash","shield_bash",
                 "sacred_heal","sacred_heal",
-                "judgement"
+                "judgement",
+                "short_prayer"
             }
         },
     };

@@ -30,6 +30,8 @@ public static class MapCardSystem
     {
         bool hasOffense = card.damage > 0 || card.poisonApply > 0 || card.burnApply > 0;
         if (hasOffense) return false;
+        // 0코스트 카드는 맵에서 코스트 없이 무한히 쓸 수 있게 되므로(회복/버프 무한 누적) 전투 전용
+        if (card.cost == 0) return false;
 
         return card.healAmount > 0 || card.block > 0 || card.strengthGain > 0
             || card.buffNextAttack > 0 || card.buffNextDefense > 0;

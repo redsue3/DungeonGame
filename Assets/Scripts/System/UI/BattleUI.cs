@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -32,7 +33,8 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private GameObject      battleTilePrefab;   // 던전맵과 같은 MapTile 프리팹 재사용
     [SerializeField] private TextMeshProUGUI moveHintText;
 
-    private const float BattleTileSize = 48f;
+    private const float BattleTileSize    = 64f; // 최대 칸 크기 (영역에 맞춰 자동으로 줄어든다)
+    private const float MinBattleTileSize = 24f;
 
     private readonly List<GameObject> handObjects  = new List<GameObject>();
     private readonly List<GameObject> enemyObjects = new List<GameObject>();
@@ -276,18 +278,29 @@ public class BattleUI : MonoBehaviour
         if (battleTilePrefab == null) return;
 
         // 방 안쪽 + 바깥 1칸(복도 진입부, 도주 시 실제로 밟는 칸)까지 걸어다닐 수 있는 칸만 그린다.
+        var cells = new List<(int x, int y)>();
         for (int x = room.x - 1; x <= room.x + room.w; x++)
-        {
             for (int y = room.y - 1; y <= room.y + room.h; y++)
-            {
-                if (!floor.IsWalkable(x, y)) continue;
+                if (floor.IsWalkable(x, y)) cells.Add((x, y));
+        if (cells.Count == 0) return;
 
-                GameObject obj = Instantiate(battleTilePrefab, battleGridParent);
-                var rt = (RectTransform)obj.transform;
-                rt.sizeDelta = new Vector2(BattleTileSize, BattleTileSize);
-                rt.anchoredPosition = new Vector2((x - room.x) * BattleTileSize, (y - room.y) * BattleTileSize);
-                battleTileObjects[(x, y)] = obj;
-            }
+        // 2026-10-26 가독성: 칸을 최대 64까지 키우되, 그리드 영역(세로가 좁다)을 넘지 않게 자동으로 맞추고 가운데 정렬한다.
+        // 예전엔 48 고정 + 영역 중심에서 오른쪽 위로만 뻗어서 큰 방은 영역 밖으로 넘쳤다.
+        int minX = cells.Min(c => c.x), maxX = cells.Max(c => c.x);
+        int minY = cells.Min(c => c.y), maxY = cells.Max(c => c.y);
+        int cols = maxX - minX + 1, rows = maxY - minY + 1;
+        Rect area = ((RectTransform)battleGridParent).rect;
+        float tile = BattleTileSize;
+        if (area.width > 0 && area.height > 0)
+            tile = Mathf.Max(MinBattleTileSize, Mathf.Min(BattleTileSize, area.width / cols, area.height / rows));
+
+        foreach (var (x, y) in cells)
+        {
+            GameObject obj = Instantiate(battleTilePrefab, battleGridParent);
+            var rt = (RectTransform)obj.transform;
+            rt.sizeDelta = new Vector2(tile, tile);
+            rt.anchoredPosition = new Vector2((x - minX - (cols - 1) / 2f) * tile, (y - minY - (rows - 1) / 2f) * tile);
+            battleTileObjects[(x, y)] = obj;
         }
     }
 
@@ -358,12 +371,6 @@ public class BattleUI : MonoBehaviour
                                                     : "인접 칸 클릭 또는 WASD로 이동 - 방 밖으로 나가면 도주";
     }
 
-    private string BuildCostPips(int current, int max)
-    {
-        var sb = new System.Text.StringBuilder("코스트 ");
-        int pips = Mathf.Max(max, current); // 유물로 최대치를 넘겨 받은 코스트도 초과분까지 표시
-        for (int i = 0; i < pips; i++)
-            sb.Append(i < current ? "◆" : "◇");
-        return sb.ToString();
-    }
+    // 예전엔 ◆◇ 기호로 그렸는데 두 폰트 모두 그 글리프가 없어 □로 깨져 보였다 - 숫자로 표시
+    private string BuildCostPips(int current, int max) => $"코스트 {current}/{max}";
 }

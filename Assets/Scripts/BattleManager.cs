@@ -13,7 +13,6 @@ public class BattleManager : MonoBehaviour
     private BattleState      state;
     private bool             playerTurnEnded;
     private bool             firstPlayerTurn;   // 전투 첫 턴은 맵에서 들고 온 코스트/방어막을 그대로 쓴다 (리필/블록 초기화 없음)
-    private int              costRefillPenalty; // 코스트 소진으로 턴이 자동 종료됐을 때, 다음 턴 리필량에서 깎이는 "리필 틈" 페널티
     private HashSet<string>  usedOnceRelics = new HashSet<string>(); // 전투당 1회만 발동하는 유물(불사조의 재 등)
     private HashSet<Enemy>   rewardedKills  = new HashSet<Enemy>();  // OnKill 유물을 이미 발동시킨 적 (중복 발동 방지)
 
@@ -24,8 +23,6 @@ public class BattleManager : MonoBehaviour
     // 이번 턴 이동 전 위치 - 카드를 내기 전이면 이동을 되돌릴 수 있다(실수로 적에게서 멀어진 경우 구제).
     // 카드를 낸 뒤에는 "이동 후 공격" 결과가 확정되므로 되돌리지 않는다. 도주는 전투가 끝나므로 대상 아님.
     private (int x, int y)?  moveUndoFrom;
-
-    private const int CostDrainPenalty = 1;
 
     public int         CurrentCost      => player != null ? player.currentCost : 0;
     public BattleState CurrentState     => state;
@@ -45,7 +42,6 @@ public class BattleManager : MonoBehaviour
         room    = battleRoom;
         usedOnceRelics.Clear();
         rewardedKills.Clear();
-        costRefillPenalty = 0;
         firstPlayerTurn   = true;
         hasMovedThisTurn  = false;
         player.deck.ResetForBattle();
@@ -93,10 +89,7 @@ public class BattleManager : MonoBehaviour
         else
         {
             player.OnTurnStart();
-            int penalty = costRefillPenalty;
-            costRefillPenalty = 0;
-            player.currentCost = Mathf.Max(0, player.maxCost - penalty);
-            if (penalty > 0) Debug.Log($"[BattleManager] 리필 틈 페널티 적용 — 이번 턴 코스트 -{penalty}");
+            player.currentCost = player.maxCost;
         }
 
         CheckHpBelowTriggers();
@@ -165,12 +158,11 @@ public class BattleManager : MonoBehaviour
             // 자해 카드로 자기 턴 중에 사망 - 턴 종료를 기다리지 않고 즉시 패배 처리
             state = BattleState.Lose;
         }
-        // 이 카드로 코스트를 완전히 소진하면 턴이 자동으로 끝나고, 다음 턴 리필에 "틈"(페널티)이 생긴다.
-        // 원래 0인 상태에서 0코스트 카드를 낸 경우는 소진이 아니므로 해당 없음.
-        else if (card.cost > 0 && player.currentCost == 0)
+        // 코스트를 다 쓰면 턴이 자동으로 끝난다. 단 손에 0코스트 카드가 남아 있으면 그걸 쓸 수 있게 기다린다.
+        // (2026-10-26 피드백: 다음 턴 리필 -1 페널티는 너무 빡빡해서 제거)
+        else if (player.currentCost == 0 && !player.deck.GetHand().Exists(c => c.cost == 0))
         {
-            costRefillPenalty = CostDrainPenalty;
-            Debug.Log("[BattleManager] 코스트 소진 — 턴 자동 종료 (다음 턴 리필 -1)");
+            Debug.Log("[BattleManager] 코스트 소진 — 턴 자동 종료");
             EndPlayerTurn();
         }
 

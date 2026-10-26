@@ -26,7 +26,28 @@ public static class LogicVerify
         CheckBossPhases();
         CheckFloorPalette();
         CheckDiagonalChase();
+        CheckClassZeroCostCards();
         Debug.Log($"[LogicVerify] 결과: 통과 {pass} · 실패 {fail}");
+    }
+
+    // ── 6. 직업별 0코스트 순환 카드 (2026-10-26) ─────────────────────────
+    // 카드가 DB에 0코스트로 있고, 자기 직업 시작 덱에 들어가며, 0코스트라 맵에서는 못 쓰는가
+    private static void CheckClassZeroCostCards()
+    {
+        var expected = new Dictionary<CharacterClass, string>
+        {
+            [CharacterClass.Warrior] = "war_cry",
+            [CharacterClass.Rogue]   = "quick_hands",
+            [CharacterClass.Mage]    = "ember",
+            [CharacterClass.Paladin] = "short_prayer",
+        };
+        foreach (var kv in expected)
+        {
+            Card card = CardDatabase.Exists(kv.Value) ? CardDatabase.Create(kv.Value) : null;
+            Check(card != null && card.cost == 0 && card.drawCount >= 1, $"{kv.Value}: CardDatabase에 0코스트 + 드로우 카드로 있음");
+            Check(PlayerDatabase.Get(kv.Key).starterDeckCardIds.Contains(kv.Value), $"{kv.Key} 시작 덱에 {kv.Value} 포함");
+            if (card != null) Check(!MapCardSystem.IsUsableOnMap(card), $"{kv.Value}: 0코스트라 맵에서는 사용 불가");
+        }
     }
 
     public static void RunBatch()

@@ -33,10 +33,11 @@ public class DungeonMapUI : MonoBehaviour
     [SerializeField] private BestiaryUI bestiaryUI;
     [SerializeField] private Button     bestiaryBtn;
 
-    private const float MinTileSize = 14f;
+    // 2026-10-26 가독성 피드백: 기본 26→36, 최소 14→20. 예전 키에 26이 저장돼 있으면 계속 작게 보이므로 키를 바꿨다.
+    private const float MinTileSize = 20f;
     private const float MaxTileSize = 48f;
-    private const float DefaultTileSize = 26f;
-    private const string TileSizePrefKey = "DungeonMap.TileSize";
+    private const float DefaultTileSize = 36f;
+    private const string TileSizePrefKey = "DungeonMap.TileSize.v2";
 
     private float TileSize;
 

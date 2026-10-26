@@ -19,7 +19,7 @@ public static class SceneSetup
     private static readonly Color BtnRed    = new Color(0.75f, 0.30f, 0.30f);
     private static readonly Color BtnYellow = new Color(0.75f, 0.65f, 0.20f);
     private static readonly Color TextWhite = Color.white;
-    private static readonly Color TextDim   = new Color(0.75f, 0.75f, 0.80f);
+    private static readonly Color TextDim   = new Color(0.86f, 0.86f, 0.90f); // 2026-10-26: 0.75 → 0.86 (어두운 배경 대비)
 
     [MenuItem("DungeonGame/씬 자동 세팅")]
     public static void BuildScene()
@@ -127,8 +127,8 @@ public static class SceneSetup
 
         var label = Text(go.transform, "Label", "?", 26, TextAlignmentOptions.Center, Color.white);
         label.enableAutoSizing = true;
-        label.fontSizeMin = 6;
-        label.fontSizeMax = 26;
+        label.fontSizeMin = 12; // 2026-10-26: 6이면 '보스!' 같은 라벨이 읽을 수 없을 만큼 작아졌다
+        label.fontSizeMax = 30;
         label.margin = new Vector4(2, 2, 2, 2);
 
         return SaveTemplateAsPrefab(go, $"{PrefabDir}/MapTile.prefab");
@@ -551,7 +551,7 @@ public static class SceneSetup
         StretchFull(playerHpText.rectTransform);
 
         var playerBlockText  = TextLine(top.transform, "BlockText", "", 18, new Color(0.5f, 0.75f, 1f), 32, 90);
-        var playerCostText   = TextLine(top.transform, "CostText", "코스트 ◆◆◆", 18, new Color(0.6f, 0.8f, 1f), 32, 200);
+        var playerCostText   = TextLine(top.transform, "CostText", "코스트 3/3", 18, new Color(0.6f, 0.8f, 1f), 32, 200);
         var playerStatusText = TextLine(top.transform, "StatusText", "", 16, new Color(0.6f, 0.9f, 0.6f), 32, 240);
         var turnText          = TextLine(top.transform, "TurnText", "당신의 턴", 20, new Color(1f, 0.85f, 0.3f), 32, 150);
 
@@ -854,12 +854,25 @@ public static class SceneSetup
         rt.offsetMax = offsetMax;
     }
 
+    // 2026-10-26 가독성 피드백: 모든 글자를 1.25배(반올림). 자리가 모자라면 자동으로 줄어들되
+    // 예전 크기 밑으로는 내려가지 않는다(카드/버튼처럼 칸이 고정된 곳에서 글자가 칸 밖으로 넘치지 않게).
+    private const float FontScale = 1.25f;
+    private static float Scaled(float size) => Mathf.Round(size * FontScale);
+
+    private static void ApplyScaledSize(TextMeshProUGUI tmp, float size)
+    {
+        tmp.fontSize = Scaled(size);
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMax = Scaled(size);
+        tmp.fontSizeMin = size;
+    }
+
     private static TextMeshProUGUI Text(Transform parent, string name, string text, float size, TextAlignmentOptions align, Color color)
     {
         GameObject go = NewGO(name, parent);
         var tmp = go.AddComponent<TextMeshProUGUI>();
         tmp.text = text;
-        tmp.fontSize = size;
+        ApplyScaledSize(tmp, size);
         tmp.alignment = align;
         tmp.color = color;
         tmp.raycastTarget = false;
@@ -873,14 +886,15 @@ public static class SceneSetup
         GameObject go = NewGO(name, parent);
         var tmp = go.AddComponent<TextMeshProUGUI>();
         tmp.text = text;
-        tmp.fontSize = size;
+        ApplyScaledSize(tmp, size);
         tmp.color = color;
         tmp.alignment = TextAlignmentOptions.MidlineLeft;
         tmp.raycastTarget = false;
 
+        // 글자가 커진 만큼 줄 높이/폭도 같이 키운다
         var le = go.AddComponent<LayoutElement>();
-        le.preferredHeight = preferredHeight;
-        if (preferredWidth > 0) le.preferredWidth = preferredWidth;
+        le.preferredHeight = Scaled(preferredHeight);
+        if (preferredWidth > 0) le.preferredWidth = Scaled(preferredWidth);
         else le.flexibleWidth = 1;
         return tmp;
     }
