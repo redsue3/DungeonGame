@@ -11,6 +11,8 @@ public class CardUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI typeTag;
     [SerializeField] private Image           cardBg;
 
+    private Image cardArt; // Art/Cards/<카드id> 그림이 있을 때만 런타임에 만든다
+
     private static readonly System.Collections.Generic.Dictionary<CardType, Color> typeColor =
         new System.Collections.Generic.Dictionary<CardType, Color>
     {
@@ -29,5 +31,33 @@ public class CardUI : MonoBehaviour
 
         if (cardBg != null && typeColor.TryGetValue(card.cardType, out Color c))
             cardBg.color = c;
+
+        Sprite art = ArtLibrary.Card(card.id);
+        if (art != null && cardArt == null) cardArt = CreateArtImage();
+        if (cardArt != null)
+        {
+            cardArt.sprite  = art;
+            cardArt.enabled = art != null;
+        }
+    }
+
+    // 카드 글자 뒤에 깔리는 그림. 글자가 읽히도록 반투명으로 둔다.
+    private Image CreateArtImage()
+    {
+        var go = new GameObject("Art", typeof(RectTransform), typeof(Image));
+        go.transform.SetParent(transform, false);
+        go.transform.SetSiblingIndex(0);
+
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+
+        var img = go.GetComponent<Image>();
+        img.preserveAspect = true;
+        img.raycastTarget  = false;
+        img.color          = new Color(1f, 1f, 1f, 0.45f);
+        return img;
     }
 }

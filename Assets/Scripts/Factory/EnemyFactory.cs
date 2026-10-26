@@ -24,6 +24,7 @@ public static class EnemyFactory
 
         enemy.isElite = data.isElite;
         enemy.isBoss  = data.isBoss;
+        enemy.templateId = enemyId;
         return enemy;
     }
 }

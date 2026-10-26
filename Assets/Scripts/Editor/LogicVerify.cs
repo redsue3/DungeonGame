@@ -27,7 +27,26 @@ public static class LogicVerify
         CheckFloorPalette();
         CheckDiagonalChase();
         CheckClassZeroCostCards();
+        CheckArtLibrary();
         Debug.Log($"[LogicVerify] 결과: 통과 {pass} · 실패 {fail}");
+    }
+
+    // ── 7. 그림 자동 연동 (Assets/Resources/Art) ─────────────────────────
+    // 그림 파일이 실제로 있을 때만 로딩을 검사한다(없으면 SKIP). 없는 이름은 항상 null이어야 한다.
+    private static void CheckArtLibrary()
+    {
+        if (System.IO.File.Exists("Assets/Resources/Art/Characters/warrior.png"))
+            Check(ArtLibrary.Character(CharacterClass.Warrior) != null, "Art/Characters/warrior.png → ArtLibrary.Character(Warrior) 로딩");
+        else
+            Debug.Log("[LogicVerify] SKIP  Art/Characters/warrior.png 없음");
+
+        if (System.IO.File.Exists("Assets/Resources/Art/Enemies/slime.png"))
+            Check(ArtLibrary.Enemy("slime") != null, "Art/Enemies/slime.png → ArtLibrary.Enemy(\"slime\") 로딩");
+        else
+            Debug.Log("[LogicVerify] SKIP  Art/Enemies/slime.png 없음");
+
+        Check(ArtLibrary.Enemy("__no_such_enemy__") == null && ArtLibrary.Background("__no_such_screen__", 1) == null,
+              "없는 그림 이름은 null (원래 색 박스로 그려짐)");
     }
 
     // ── 6. 직업별 0코스트 순환 카드 (2026-10-26) ─────────────────────────

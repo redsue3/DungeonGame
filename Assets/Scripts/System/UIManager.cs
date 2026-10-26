@@ -19,6 +19,24 @@ public class UIManager : MonoBehaviour
     private Dictionary<GameState, GameObject> panels;
     private BattleUI battleUI;
 
+    // 화면별 배경 그림 파일 이름 (Assets/Resources/Art/Backgrounds/<이름>.png, 계층별은 <이름>_<계층>.png)
+    private static readonly Dictionary<GameState, string> backgroundNames = new Dictionary<GameState, string>
+    {
+        [GameState.CharacterSelect] = "title",
+        [GameState.DungeonMap]      = "map",
+        [GameState.Battle]          = "battle",
+        [GameState.Reward]          = "reward",
+        [GameState.Rest]            = "rest",
+        [GameState.Shop]            = "shop",
+        [GameState.Shrine]          = "shrine",
+        [GameState.GameOver]        = "gameover",
+        [GameState.Victory]         = "victory",
+    };
+    private readonly Dictionary<GameObject, Color> originalPanelColors = new Dictionary<GameObject, Color>();
+
+    // 배경 그림 위의 글자가 묻히지 않게 그림을 살짝 어둡게 깐다
+    private static readonly Color BackgroundTint = new Color(0.7f, 0.7f, 0.7f, 1f);
+
     void Awake()
     {
         Instance = this;
@@ -44,10 +62,27 @@ public class UIManager : MonoBehaviour
         foreach (GameObject panel in panels.Values)
             panel?.SetActive(false);
 
-        if (panels.TryGetValue(state, out GameObject target))
-            target?.SetActive(true);
+        if (panels.TryGetValue(state, out GameObject target) && target != null)
+        {
+            target.SetActive(true);
+            ApplyBackground(state, target);
+        }
 
         Debug.Log($"[UIManager] 패널 전환 → {state}");
+    }
+
+    // Art/Backgrounds에 이 화면 그림이 있으면 패널 바탕 Image에 깔고, 없으면 원래 단색으로 둔다
+    private void ApplyBackground(GameState state, GameObject panel)
+    {
+        var img = panel.GetComponent<UnityEngine.UI.Image>();
+        if (img == null || !backgroundNames.TryGetValue(state, out string name)) return;
+
+        if (!originalPanelColors.ContainsKey(panel)) originalPanelColors[panel] = img.color;
+
+        int layer = DungeonManager.Instance != null ? DungeonManager.Instance.CurrentLayer : 1;
+        Sprite bg = ArtLibrary.Background(name, layer);
+        img.sprite = bg;
+        img.color  = bg != null ? BackgroundTint : originalPanelColors[panel];
     }
 
     public void RefreshBattle() => battleUI?.Refresh();

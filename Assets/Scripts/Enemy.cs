@@ -32,6 +32,7 @@ public class Enemy : Character
     public int  rewardGoldMax;
     public bool isElite;
     public bool isBoss;
+    public string templateId; // EnemyDatabase 키 - 그림(ArtLibrary.Enemy) 찾을 때 쓴다
 
     // 4단계(전투 그리드 통합) - 전투 중 이 적의 방 안 좌표. DungeonManager.Engage()가
     // originating EnemySpawn에서 초기값을 복사하고, spawnId로 도주 시 위치를 되돌려준다.

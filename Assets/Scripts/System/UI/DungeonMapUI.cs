@@ -226,7 +226,11 @@ public class DungeonMapUI : MonoBehaviour
         playerBtn.onClick.RemoveAllListeners();
         playerBtn.interactable = onStairs;
         if (onStairs) playerBtn.onClick.AddListener(DungeonManager.Instance.DescendStairs);
-        playerMarker.GetComponentInChildren<TextMeshProUGUI>().text = onStairs ? "계단" : "★";
+        Sprite playerArt = onStairs ? null : ArtLibrary.Character(DungeonManager.Instance.Player.characterClass);
+        var playerImg = playerMarker.GetComponent<Image>();
+        playerImg.sprite = playerArt;
+        playerImg.color  = playerArt != null ? Color.white : PlayerColor;
+        playerMarker.GetComponentInChildren<TextMeshProUGUI>().text = onStairs ? "계단" : playerArt != null ? "" : "★";
 
         var (floorVisible, floorDim) = GetFloorPalette(floor.Layer);
 
@@ -326,6 +330,11 @@ public class DungeonMapUI : MonoBehaviour
                 markerImg.color = chasing ? EnemyChaseColor : EnemyIdleColor;
                 markerLbl.text  = chasing ? "!" : "?";
             }
+
+            // Art 폴더에 이 몬스터 그림이 있으면 색 박스 대신 그림을 쓴다 (글자 표시는 그대로 위에 얹는다)
+            Sprite enemyArt = ArtLibrary.Enemy(e.enemyTemplateId);
+            markerImg.sprite = enemyArt;
+            if (enemyArt != null) markerImg.color = Color.white;
         }
 
         var toRemove = new List<int>();

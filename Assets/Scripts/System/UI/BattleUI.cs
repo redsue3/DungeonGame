@@ -321,19 +321,27 @@ public class BattleUI : MonoBehaviour
             bool  isPlayer = x == floor.PlayerX && y == floor.PlayerY;
             Enemy occupant = isPlayer ? null : enemies.Find(e => e.IsAlive && e.x == x && e.y == y);
 
+            // Art 폴더에 그림이 있으면 그 그림을, 없으면 지금까지처럼 색 박스 + 글자로 그린다
+            Sprite art = isPlayer         ? ArtLibrary.Character(DungeonManager.Instance.Player.characterClass)
+                       : occupant != null ? ArtLibrary.Enemy(occupant.templateId)
+                                          : null;
+            img.sprite = art;
+
             if (isPlayer)
             {
-                img.color = new Color(0.2f, 0.6f, 1f);
-                lbl.text  = "★";
+                img.color = art != null ? Color.white : new Color(0.2f, 0.6f, 1f);
+                lbl.text  = art != null ? "" : "★";
             }
             else if (occupant != null)
             {
                 // 보스/정예는 색과 글자로 구분 (던전맵 마커와 같은 색 규칙)
-                Color baseColor = occupant.isBoss  ? new Color(1f, 0.5f, 0f)
+                Color baseColor = art != null      ? Color.white
+                                : occupant.isBoss  ? new Color(1f, 0.5f, 0f)
                                 : occupant.isElite ? new Color(0.7f, 0.2f, 0.8f)
                                                    : new Color(0.7f, 0.35f, 0.3f);
-                img.color = occupant == selectedTarget ? Color.Lerp(baseColor, Color.white, 0.35f) : baseColor;
-                lbl.text  = occupant.isBoss ? "보스" : occupant.isElite ? "정예" : "적";
+                Color selectedColor = art != null ? new Color(1f, 0.85f, 0.4f) : Color.Lerp(baseColor, Color.white, 0.35f);
+                img.color = occupant == selectedTarget ? selectedColor : baseColor;
+                lbl.text  = occupant.isBoss ? "보스" : occupant.isElite ? "정예" : art != null ? "" : "적";
             }
             else
             {
