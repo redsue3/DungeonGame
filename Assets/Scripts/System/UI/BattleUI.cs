@@ -42,11 +42,19 @@ public class BattleUI : MonoBehaviour
     // 단일 공격 카드가 때릴 적. 인덱스가 아니라 참조로 들고 있어야
     // 죽은 적이 목록에서 빠져도 엉뚱한 적을 때리지 않는다.
     private Enemy selectedTarget;
+    // 플레이어가 직접 클릭해서 고른 타겟이면 true. 아니면 매번 가장 가까운 적을 자동으로 고른다 -
+    // 예전엔 "첫 번째 생존 적"이 기본이라 적이 여럿일 때 멀리 있는 적이 잡혀서 옆에 붙은 적을 못 때렸다.
+    private bool targetPinned;
+
+    // 붙어 있던 적에게서 떨어지는 키보드 이동은 같은 방향을 한 번 더 눌러야 실행된다(실수 이동 방지).
+    private (int dx, int dy)? pendingAwayMove;
 
     void OnEnable()
     {
         endTurnBtn.onClick.AddListener(OnEndTurn);
         selectedTarget = null; // 새 전투 - 이전 전투의 적 참조를 버린다
+        targetPinned   = false;
+        pendingAwayMove = null;
         lastGridRoom = null;   // 새 전투 - 방이 바뀌었을 수 있으니 그리드도 강제로 다시 그린다
         Refresh();
     }
@@ -60,16 +68,22 @@ public class BattleUI : MonoBehaviour
     {
         if (BattleManager.Instance == null || BattleManager.Instance.CurrentState != BattleState.PlayerTurn) return;
 
-        if (Input.GetKeyDown(KeyCode.UpArrow)    || Input.GetKeyDown(KeyCode.W)) TryMove(0, 1);
-        else if (Input.GetKeyDown(KeyCode.DownArrow)  || Input.GetKeyDown(KeyCode.S)) TryMove(0, -1);
-        else if (Input.GetKeyDown(KeyCode.LeftArrow)  || Input.GetKeyDown(KeyCode.A)) TryMove(-1, 0);
-        else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) TryMove(1, 0);
+        if (Input.GetKeyDown(KeyCode.UpArrow)    || Input.GetKeyDown(KeyCode.W)) TryMove(0, 1, fromKeyboard: true);
+        else if (Input.GetKeyDown(KeyCode.DownArrow)  || Input.GetKeyDown(KeyCode.S)) TryMove(0, -1, fromKeyboard: true);
+        else if (Input.GetKeyDown(KeyCode.LeftArrow)  || Input.GetKeyDown(KeyCode.A)) TryMove(-1, 0, fromKeyboard: true);
+        else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) TryMove(1, 0, fromKeyboard: true);
+        else if (Input.GetKeyDown(KeyCode.Backspace) && BattleManager.Instance.UndoMove())
+        {
+            targetPinned = false; // 원위치로 돌아왔으니 다시 가장 가까운 적을 노린다
+            Refresh();
+        }
     }
 
     // BattleManager에서 매 변경마다 호출.
     // RefreshEnemies가 selectedTarget을 확정시켜야 RefreshHand의 사거리 판정이 정확해서 순서가 중요하다.
     public void Refresh()
     {
+        pendingAwayMove = null;
         RefreshPlayerStatus();
         RefreshEnemies();
         RefreshHand();
@@ -143,9 +157,9 @@ public class BattleUI : MonoBehaviour
         var enemies = BattleManager.Instance?.GetEnemies();
         if (enemies == null) return;
 
-        // 아직 타겟이 없거나 선택했던 적이 죽었으면 첫 번째 생존 적으로
-        if (selectedTarget == null || !selectedTarget.IsAlive)
-            selectedTarget = enemies.Find(e => e.IsAlive);
+        // 직접 고른 타겟이 없거나 죽었으면 플레이어에게 가장 가까운 생존 적으로
+        if (selectedTarget == null || !selectedTarget.IsAlive) targetPinned = false;
+        if (!targetPinned) selectedTarget = NearestEnemy(enemies);
 
         foreach (Enemy enemy in enemies)
         {
@@ -163,6 +177,7 @@ public class BattleUI : MonoBehaviour
                 btn.onClick.AddListener(() =>
                 {
                     selectedTarget = captured;
+                    targetPinned   = true;
                     RefreshEnemies();
                     RefreshHand(); // 타겟이 바뀌면 사거리 판정도 다시 해야 카드 활성화 상태가 즉시 맞는다
                 });
@@ -187,10 +202,51 @@ public class BattleUI : MonoBehaviour
         return BattleGridSystem.Chebyshev(floor.PlayerX, floor.PlayerY, selectedTarget.x, selectedTarget.y) <= card.attackRange;
     }
 
-    private void TryMove(int dx, int dy)
+    private void TryMove(int dx, int dy, bool fromKeyboard = false)
     {
-        if (BattleManager.Instance != null && BattleManager.Instance.TryMovePlayer(dx, dy))
+        var bm = BattleManager.Instance;
+        if (bm == null || bm.CurrentState != BattleState.PlayerTurn || bm.HasMovedThisTurn) return;
+
+        if (fromKeyboard && LosesContact(dx, dy) && pendingAwayMove != (dx, dy))
+        {
+            pendingAwayMove = (dx, dy);
+            if (moveHintText != null) moveHintText.text = "붙어 있는 적에게서 멀어집니다 - 같은 방향을 한 번 더 누르면 이동";
+            return;
+        }
+
+        if (bm.TryMovePlayer(dx, dy))
+        {
+            targetPinned = false; // 위치가 바뀌었으니 다시 가장 가까운 적을 노린다
             Refresh();
+        }
+    }
+
+    // 지금 붙어 있는 적이 있는데 (dx,dy)로 움직이면 아무에게도 붙어 있지 않게 되는지
+    private static bool LosesContact(int dx, int dy)
+    {
+        var floor   = DungeonManager.Instance?.CurrentFloor;
+        var enemies = BattleManager.Instance?.GetEnemies();
+        if (floor == null || enemies == null) return false;
+
+        var adjacent = enemies.FindAll(e => e.IsAlive && BattleGridSystem.Chebyshev(floor.PlayerX, floor.PlayerY, e.x, e.y) <= 1);
+        if (adjacent.Count == 0) return false;
+
+        int nx = floor.PlayerX + dx, ny = floor.PlayerY + dy;
+        return !adjacent.Exists(e => BattleGridSystem.Chebyshev(nx, ny, e.x, e.y) <= 1);
+    }
+
+    private static Enemy NearestEnemy(List<Enemy> enemies)
+    {
+        var floor = DungeonManager.Instance?.CurrentFloor;
+        Enemy best = null;
+        int bestDist = int.MaxValue;
+        foreach (Enemy e in enemies)
+        {
+            if (!e.IsAlive) continue;
+            int d = floor != null ? BattleGridSystem.Chebyshev(floor.PlayerX, floor.PlayerY, e.x, e.y) : 0;
+            if (d < bestDist) { best = e; bestDist = d; }
+        }
+        return best;
     }
 
     // ─────────────────────────────────────────
@@ -259,8 +315,12 @@ public class BattleUI : MonoBehaviour
             }
             else if (occupant != null)
             {
-                img.color = occupant == selectedTarget ? new Color(1f, 0.3f, 0.25f) : new Color(0.7f, 0.35f, 0.3f);
-                lbl.text  = "적";
+                // 보스/정예는 색과 글자로 구분 (던전맵 마커와 같은 색 규칙)
+                Color baseColor = occupant.isBoss  ? new Color(1f, 0.5f, 0f)
+                                : occupant.isElite ? new Color(0.7f, 0.2f, 0.8f)
+                                                   : new Color(0.7f, 0.35f, 0.3f);
+                img.color = occupant == selectedTarget ? Color.Lerp(baseColor, Color.white, 0.35f) : baseColor;
+                lbl.text  = occupant.isBoss ? "보스" : occupant.isElite ? "정예" : "적";
             }
             else
             {
@@ -279,7 +339,7 @@ public class BattleUI : MonoBehaviour
                 // 적이 서 있는 칸 클릭 - 카드 타겟 선택 (인접 여부와 무관, 사거리는 카드 사용 시점에 따로 체크)
                 Enemy captured = occupant;
                 btn.interactable = true;
-                btn.onClick.AddListener(() => { selectedTarget = captured; Refresh(); });
+                btn.onClick.AddListener(() => { selectedTarget = captured; targetPinned = true; Refresh(); });
             }
             else if (canAct && isAdjacent)
             {
@@ -293,8 +353,9 @@ public class BattleUI : MonoBehaviour
         }
 
         if (moveHintText != null)
-            moveHintText.text = bm.HasMovedThisTurn ? "이동 완료 (다음 턴에 다시 이동 가능)"
-                                                     : "인접 칸 클릭 또는 WASD로 이동 - 방 밖으로 나가면 도주";
+            moveHintText.text = bm.CanUndoMove      ? "이동 완료 - 카드를 내기 전이면 Backspace로 이동 취소"
+                              : bm.HasMovedThisTurn ? "이동 완료 (다음 턴에 다시 이동 가능)"
+                                                    : "인접 칸 클릭 또는 WASD로 이동 - 방 밖으로 나가면 도주";
     }
 
     private string BuildCostPips(int current, int max)

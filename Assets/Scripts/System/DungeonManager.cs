@@ -16,6 +16,12 @@ public class DungeonManager : MonoBehaviour
     private const int FinalLayer = 3; // 이 계층의 보스를 잡으면 게임 승리
 
     private int            currentLayer = 1;
+
+    // 저장은 계층 번호만 남기고 이어하기 때 층을 새로 생성한다. 계단이 열린(보스 처치) 층을 그대로 저장하면
+    // 이어하기에서 보스가 되살아나므로, 그 경우엔 다음 계층으로 저장한다(예전 "보스 처치 즉시 다음 층"과 같은 결과).
+    private int SaveLayer => CurrentFloor?.Stairs != null ? currentLayer + 1 : currentLayer;
+
+    public bool IsOnStairs => CurrentFloor?.Stairs is { } st && st.x == CurrentFloor.PlayerX && st.y == CurrentFloor.PlayerY;
     private RoomInfo       currentRoom;   // 지금 상호작용 중인 방 (전투/휴식/상점/성소 공용)
     private BattleReward   pendingReward;
     private ShopSystem     shop = new ShopSystem();
@@ -82,6 +88,18 @@ public class DungeonManager : MonoBehaviour
 
         TryEnterRoomEvent(nx, ny);
         return true;
+    }
+
+    // 계단 위에서 확인(Enter/플레이어 칸 클릭)했을 때 호출 - 다음 계층으로 내려간다. 되돌아올 수 없다.
+    public void DescendStairs()
+    {
+        if (CurrentState != GameState.DungeonMap || !IsOnStairs) return;
+
+        currentLayer++;
+        CurrentFloor = FloorGenerator.Generate(currentLayer);
+        Debug.Log($"[DungeonManager] 계단으로 내려감 → {currentLayer}계층");
+        SaveSystem.Save(Player, currentLayer);
+        TransitionTo(GameState.DungeonMap);
     }
 
     private bool TryEngageEnemyAt(int x, int y)
@@ -285,11 +303,10 @@ public class DungeonManager : MonoBehaviour
             relicId     = relicId,
         };
 
-        if (isBoss)
-        {
-            currentLayer++;
-            CurrentFloor = FloorGenerator.Generate(currentLayer);
-        }
+        // 보스를 잡아도 바로 다음 층으로 넘기지 않는다 - 보스방 중심에 계단을 열고, 플레이어가 직접 밟고
+        // 확인해야 내려간다(DescendStairs). 남은 휴식/상점/성소를 들렀다 갈 수 있게 하기 위함.
+        if (isBoss && currentRoom != null)
+            CurrentFloor.Stairs = (currentRoom.CenterX, currentRoom.CenterY);
 
         TransitionTo(GameState.Reward);
     }
@@ -324,13 +341,13 @@ public class DungeonManager : MonoBehaviour
             Player.deck.AddCard(card);
             Debug.Log($"[DungeonManager] 카드 획득: {card.cardName}");
         }
-        SaveSystem.Save(Player, currentLayer);
+        SaveSystem.Save(Player, SaveLayer);
         TransitionTo(GameState.DungeonMap);
     }
 
     public void SkipCardReward()
     {
-        SaveSystem.Save(Player, currentLayer);
+        SaveSystem.Save(Player, SaveLayer);
         TransitionTo(GameState.DungeonMap);
     }
 
@@ -340,7 +357,7 @@ public class DungeonManager : MonoBehaviour
         int heal = Mathf.RoundToInt(Player.maxHp * 0.3f);
         Player.Heal(heal);
         if (currentRoom != null) currentRoom.isCleared = true;
-        SaveSystem.Save(Player, currentLayer);
+        SaveSystem.Save(Player, SaveLayer);
         TransitionTo(GameState.DungeonMap);
     }
 
@@ -382,7 +399,7 @@ public class DungeonManager : MonoBehaviour
 
         Player.ChangeHunger(food.hungerRestore);
         Debug.Log($"[DungeonManager] {food.displayName} 섭취 → 배고픔 +{food.hungerRestore} (현재 {Player.hunger}/{Player.maxHunger})");
-        SaveSystem.Save(Player, currentLayer);
+        SaveSystem.Save(Player, SaveLayer);
         return true;
     }
 
@@ -411,7 +428,7 @@ public class DungeonManager : MonoBehaviour
 
         if (currentRoom != null) currentRoom.isCleared = true;
         pendingShrineOptions = null;
-        SaveSystem.Save(Player, currentLayer);
+        SaveSystem.Save(Player, SaveLayer);
         TransitionTo(GameState.DungeonMap);
         return true;
     }
@@ -420,7 +437,7 @@ public class DungeonManager : MonoBehaviour
     public void LeaveShop()
     {
         if (currentRoom != null && shopPurchasedThisVisit) currentRoom.isCleared = true;
-        SaveSystem.Save(Player, currentLayer);
+        SaveSystem.Save(Player, SaveLayer);
         TransitionTo(GameState.DungeonMap);
     }
 

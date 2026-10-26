@@ -46,6 +46,9 @@ public class DungeonFloor
 
     public int PlayerX, PlayerY;
 
+    // 보스를 잡으면 보스방 중심에 생기는 내려가는 계단. null이면 아직 없음. 일방통행이라 올라가는 계단은 없다.
+    public (int x, int y)? Stairs;
+
     public DungeonFloor(int layer, int width, int height)
     {
         Layer   = layer;

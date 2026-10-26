@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -56,7 +57,7 @@ public class DungeonMapUI : MonoBehaviour
         [TileType.NormalEnemy] = new Color(0.9f, 0.4f, 0.4f),
         [TileType.GroupEnemy]  = new Color(0.85f, 0.3f, 0.3f),
         [TileType.EliteEnemy]  = new Color(0.7f, 0.2f, 0.8f),
-        [TileType.Boss]        = new Color(1f, 0.2f, 0.2f),
+        [TileType.Boss]        = new Color(1f, 0.5f, 0f),   // 주황 - 일반/무리 방의 빨강과 구분되게
         [TileType.Rest]        = new Color(0.3f, 0.75f, 0.4f),
         [TileType.Shop]        = new Color(1f, 0.8f, 0.2f),
         [TileType.Shrine]      = new Color(0.6f, 0.5f, 1f),
@@ -81,6 +82,9 @@ public class DungeonMapUI : MonoBehaviour
     private static readonly Color PlayerColor        = new Color(0.2f, 0.6f, 1f);
     private static readonly Color EnemyIdleColor     = new Color(0.6f, 0.55f, 0.2f);
     private static readonly Color EnemyChaseColor    = new Color(1f, 0.25f, 0.2f);
+    private static readonly Color BossMarkerColor    = new Color(1f, 0.5f, 0f);
+    private static readonly Color EliteMarkerColor   = new Color(0.7f, 0.2f, 0.8f);
+    private static readonly Color StairsColor        = new Color(0.95f, 0.95f, 0.95f);
 
     private DungeonFloor lastFloor;
     private readonly Dictionary<(int, int), GameObject> floorTileObjects = new Dictionary<(int, int), GameObject>();
@@ -114,6 +118,7 @@ public class DungeonMapUI : MonoBehaviour
         else if (Input.GetKeyDown(KeyCode.DownArrow)  || Input.GetKeyDown(KeyCode.S)) Move(0, -1);
         else if (Input.GetKeyDown(KeyCode.LeftArrow)  || Input.GetKeyDown(KeyCode.A)) Move(-1, 0);
         else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) Move(1, 0);
+        else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) DungeonManager.Instance.DescendStairs();
 
         float scroll = Input.mouseScrollDelta.y;
         if (scroll != 0f) Zoom(scroll);
@@ -139,7 +144,9 @@ public class DungeonMapUI : MonoBehaviour
         DungeonFloor floor = DungeonManager.Instance?.CurrentFloor;
         if (floor == null) return;
 
-        layerText.text = $"{floor.Layer}계층";
+        bool onStairs = DungeonManager.Instance.IsOnStairs;
+        layerText.text = onStairs ? $"{floor.Layer}계층 - 계단: Enter 또는 계단 칸 클릭으로 내려가기 (돌아올 수 없음)"
+                                  : $"{floor.Layer}계층";
         UpdatePlayerStatus();
 
         if (floor != lastFloor)
@@ -213,6 +220,12 @@ public class DungeonMapUI : MonoBehaviour
         var playerRt = (RectTransform)playerMarker.transform;
         playerRt.anchoredPosition = Vector2.zero;
         playerRt.sizeDelta = new Vector2(TileSize, TileSize);
+        bool onStairs = DungeonManager.Instance.IsOnStairs;
+        var playerBtn = playerMarker.GetComponent<Button>();
+        playerBtn.onClick.RemoveAllListeners();
+        playerBtn.interactable = onStairs;
+        if (onStairs) playerBtn.onClick.AddListener(DungeonManager.Instance.DescendStairs);
+        playerMarker.GetComponentInChildren<TextMeshProUGUI>().text = onStairs ? "계단" : "★";
 
         var (floorVisible, floorDim) = GetFloorPalette(floor.Layer);
 
@@ -236,7 +249,14 @@ public class DungeonMapUI : MonoBehaviour
             bool showRoomIcon = roomCenters.TryGetValue((x, y), out RoomInfo room)
                                  && !room.isCleared && roomIcon.ContainsKey(room.roomType);
 
-            if (showRoomIcon)
+            bool isStairs = floor.Stairs is { } st && st.x == x && st.y == y;
+
+            if (isStairs)
+            {
+                img.color = visible ? StairsColor : StairsColor * new Color(0.5f, 0.5f, 0.5f, 1f);
+                lbl.text  = "계단";
+            }
+            else if (showRoomIcon)
             {
                 img.color = visible ? roomColor[room.roomType] : roomColor[room.roomType] * new Color(0.5f, 0.5f, 0.5f, 1f);
                 lbl.text  = roomIcon[room.roomType];
@@ -280,11 +300,31 @@ public class DungeonMapUI : MonoBehaviour
                 enemyMarkers[e.id] = obj;
             }
 
+            // 보스/정예는 방 타입으로 구분해서 색과 글자를 따로 쓴다 - 일반 적과 같은 '?'/'!' 마커라 구분이 안 됐다.
+            TileType kind = floor.Rooms.FirstOrDefault(r => r.id == e.roomId)?.roomType ?? TileType.NormalEnemy;
+            bool chasing = e.state == EnemyAiState.Chasing;
+            float size = kind == TileType.Boss ? 1f : 0.8f;
+
             var ert = (RectTransform)obj.transform;
-            ert.sizeDelta = new Vector2(TileSize * 0.8f, TileSize * 0.8f);
+            ert.sizeDelta = new Vector2(TileSize * size, TileSize * size);
             ert.anchoredPosition = new Vector2((e.x - px) * TileSize, (e.y - py) * TileSize);
-            obj.GetComponent<Image>().color = e.state == EnemyAiState.Chasing ? EnemyChaseColor : EnemyIdleColor;
-            obj.GetComponentInChildren<TextMeshProUGUI>().text = e.state == EnemyAiState.Chasing ? "!" : "?";
+            var markerImg = obj.GetComponent<Image>();
+            var markerLbl = obj.GetComponentInChildren<TextMeshProUGUI>();
+            if (kind == TileType.Boss)
+            {
+                markerImg.color = BossMarkerColor;
+                markerLbl.text  = chasing ? "보스!" : "보스";
+            }
+            else if (kind == TileType.EliteEnemy)
+            {
+                markerImg.color = EliteMarkerColor;
+                markerLbl.text  = chasing ? "정예!" : "정예";
+            }
+            else
+            {
+                markerImg.color = chasing ? EnemyChaseColor : EnemyIdleColor;
+                markerLbl.text  = chasing ? "!" : "?";
+            }
         }
 
         var toRemove = new List<int>();

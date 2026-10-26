@@ -21,12 +21,16 @@ public class BattleManager : MonoBehaviour
     private DungeonFloor     floor;
     private RoomInfo         room;
     private bool             hasMovedThisTurn; // 턴당 이동은 1칸만 (카드 코스트와 별개의 자원)
+    // 이번 턴 이동 전 위치 - 카드를 내기 전이면 이동을 되돌릴 수 있다(실수로 적에게서 멀어진 경우 구제).
+    // 카드를 낸 뒤에는 "이동 후 공격" 결과가 확정되므로 되돌리지 않는다. 도주는 전투가 끝나므로 대상 아님.
+    private (int x, int y)?  moveUndoFrom;
 
     private const int CostDrainPenalty = 1;
 
     public int         CurrentCost      => player != null ? player.currentCost : 0;
     public BattleState CurrentState     => state;
     public bool         HasMovedThisTurn => hasMovedThisTurn;
+    public bool         CanUndoMove      => state == BattleState.PlayerTurn && moveUndoFrom.HasValue;
     public RoomInfo    Room             => room;
     public List<Enemy> GetEnemies() => enemies;
 
@@ -78,6 +82,7 @@ public class BattleManager : MonoBehaviour
     {
         playerTurnEnded  = false;
         hasMovedThisTurn = false;
+        moveUndoFrom     = null;
 
         if (firstPlayerTurn)
         {
@@ -135,7 +140,7 @@ public class BattleManager : MonoBehaviour
         bool hasOffense = card.damage > 0 || card.poisonApply > 0 || card.burnApply > 0;
         if (hasOffense && !card.isAoe)
         {
-            Enemy resolved = target != null && target.IsAlive ? target : enemies.Find(e => e.IsAlive);
+            Enemy resolved = target != null && target.IsAlive ? target : NearestAliveEnemy();
             if (resolved != null && BattleGridSystem.Chebyshev(floor.PlayerX, floor.PlayerY, resolved.x, resolved.y) > card.attackRange)
             {
                 Debug.Log($"[{card.cardName}] 사거리 밖! (사거리 {card.attackRange})");
@@ -144,6 +149,7 @@ public class BattleManager : MonoBehaviour
         }
 
         player.currentCost -= card.cost;
+        moveUndoFrom = null; // 카드를 냈으면 이동은 확정
         player.deck.PlayCard(handIndex, BuildTargets(card, target), player, player.GetFinalAttackBonus());
         Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{player.currentCost}");
 
@@ -188,10 +194,12 @@ public class BattleManager : MonoBehaviour
     {
         if (state != BattleState.PlayerTurn || hasMovedThisTurn) return false;
 
+        int fromX = floor.PlayerX, fromY = floor.PlayerY;
         var result = BattleGridSystem.TryMovePlayer(floor, room, enemies, dx, dy, out List<Enemy> attackers);
         if (result == BattleGridSystem.MoveResult.Blocked) return false;
 
         hasMovedThisTurn = true;
+        moveUndoFrom     = result == BattleGridSystem.MoveResult.Moved ? (fromX, fromY) : ((int, int)?)null;
 
         if (result == BattleGridSystem.MoveResult.Fled)
         {
@@ -206,6 +214,34 @@ public class BattleManager : MonoBehaviour
             state = player.IsAlive ? BattleState.Fled : BattleState.Lose;
         }
 
+        NotifyUI();
+        return true;
+    }
+
+    // 타겟을 안 넘겼을 때의 기본 대상 - 목록 순서가 아니라 플레이어에게 가장 가까운 생존 적
+    // (BattleUI의 자동 타겟과 같은 규칙. 첫 번째 적으로 잡으면 멀리 막혀 있는 적만 노리다 옆의 적을 못 때린다)
+    private Enemy NearestAliveEnemy()
+    {
+        Enemy best = null;
+        int bestDist = int.MaxValue;
+        foreach (Enemy e in enemies)
+        {
+            if (!e.IsAlive) continue;
+            int d = BattleGridSystem.Chebyshev(floor.PlayerX, floor.PlayerY, e.x, e.y);
+            if (d < bestDist) { best = e; bestDist = d; }
+        }
+        return best;
+    }
+
+    // 이번 턴 이동 되돌리기 - 카드를 내기 전에만. 되돌리면 이번 턴 이동권도 돌려받는다.
+    public bool UndoMove()
+    {
+        if (!CanUndoMove) return false;
+        floor.PlayerX = moveUndoFrom.Value.x;
+        floor.PlayerY = moveUndoFrom.Value.y;
+        moveUndoFrom     = null;
+        hasMovedThisTurn = false;
+        Debug.Log($"[BattleManager] 이동 취소 → ({floor.PlayerX},{floor.PlayerY})");
         NotifyUI();
         return true;
     }
@@ -282,8 +318,7 @@ public class BattleManager : MonoBehaviour
         var alive = enemies.FindAll(e => e.IsAlive);
         if (card.isAoe) return alive.ConvertAll(e => (Character)e);
 
-        Enemy resolved = target != null && target.IsAlive ? target
-                       : alive.Count > 0                  ? alive[0] : null;
+        Enemy resolved = target != null && target.IsAlive ? target : NearestAliveEnemy();
         return resolved != null ? new List<Character> { resolved } : new List<Character>();
     }
 
