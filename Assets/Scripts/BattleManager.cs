@@ -256,6 +256,11 @@ public class BattleManager : MonoBehaviour
 
     private void OnBattleEnd()
     {
+        // 힘은 한 전투 동안만 유지된다. 맵에서 미리 올린 힘은 바로 다음 전투 한 번에만 들어간다.
+        // 초기화하지 않으면 걸어서 회복한 코스트로 맵에서 담금질(힘 +2)을 반복해 힘이 끝없이 쌓이고,
+        // 전투 목걸이·마왕의 왕관(전투 시작 시 힘)도 전투마다 누적됐다. (2026-11-10 밸런스 작업)
+        if (player != null) player.strengthStack = 0;
+
         switch (state)
         {
             case BattleState.Win:
