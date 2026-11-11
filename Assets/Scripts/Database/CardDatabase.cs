@@ -17,9 +17,9 @@ public static class CardDatabase
 
         // 마법사 스타터
         // fireball/lightning은 4단계(전투 그리드) 부터 사거리 3짜리 원거리 주문 - 마법사의 "키이팅" 정체성
-        ["fireball"]      = new Card("fireball",      "화염구",       1, CardType.Attack,  dmg:  7, range: 3),
+        ["fireball"]      = new Card("fireball",      "화염구",       1, CardType.Attack,  dmg:  4, range: 3),
         ["mana_shield"]   = new Card("mana_shield",   "마력 방벽",    1, CardType.Defense, blk:  4),
-        ["lightning"]     = new Card("lightning",     "번개",         2, CardType.Attack,  dmg: 18, range: 3),
+        ["lightning"]     = new Card("lightning",     "번개",         2, CardType.Attack,  dmg: 12, range: 3),
         ["draw_spell"]    = new Card("draw_spell",    "드로우 마법",  1, CardType.Skill,   draw: 2),
 
         // 성기사 스타터

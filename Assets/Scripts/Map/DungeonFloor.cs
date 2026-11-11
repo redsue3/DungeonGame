@@ -27,6 +27,9 @@ public class EnemySpawn
     public int           x, y;
     public bool          isDead;
     public EnemyAiState  state = EnemyAiState.Idle;
+    // 능력치 배율 - 전투에 들어갈 때 EnemyFactory가 HP·행동 수치·골드에 곱한다.
+    // 집단 조우 무리원은 FloorGenerator.GroupMemberScale(1/3)이라 셋을 합쳐 일반몹 1마리 몫이 된다.
+    public float         statScale = 1f;
 }
 
 // 실제로 걸어다니는 픽셀던전 스타일 2D 타일 던전 한 층.

@@ -2,7 +2,7 @@ public enum TileType
 {
     Empty,
     NormalEnemy,   // 일반 조우 (적 1마리)
-    GroupEnemy,    // 집단 조우 (적 2~3마리)
+    GroupEnemy,    // 집단 조우 (적 3마리, 각자 1/3 능력치라 합치면 일반몹 1마리 몫)
     EliteEnemy,    // 엘리트 조우
     Boss,          // 보스
     Rest,          // 휴식

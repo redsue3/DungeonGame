@@ -102,7 +102,7 @@ public class DungeonManager : MonoBehaviour
         var enemyList = new List<Enemy>();
         foreach (EnemySpawn s in spawns)
         {
-            Enemy e = EnemyFactory.Create(s.enemyTemplateId);
+            Enemy e = EnemyFactory.Create(s.enemyTemplateId, s.statScale); // 집단 조우 무리원은 1/3 능력치
             if (e == null) continue;
             MonsterLoreDatabase.MarkDiscovered(s.enemyTemplateId); // 도감: 한 번이라도 맞붙은 적은 설정이 열린다
             // 4단계 - 전투는 이 EnemySpawn이 서 있던 그리드 좌표에서 그대로 이어진다.

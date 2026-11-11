@@ -213,10 +213,15 @@ public static class FloorGenerator
             {
                 case TileType.NormalEnemy:
                     SpawnOne(floor, room, PickNormal(layer), ref nextId);
+                    // 깊이 내려갈수록 일반 방에 두 마리(각자 원래 능력치)가 같이 있을 확률이 오른다 (2026-11-11)
+                    // 한 마리씩은 층마다 플레이어보다 조금 덜 강해지고, 대신 마릿수로 압박한다.
+                    if (Random.value < NormalPairChance(layer))
+                        SpawnOne(floor, room, PickNormal(layer), ref nextId);
                     break;
                 case TileType.GroupEnemy:
-                    SpawnOne(floor, room, PickNormal(layer), ref nextId);
-                    SpawnOne(floor, room, PickNormal(layer), ref nextId);
+                    // 집단 조우: 일반몹 3마리가 각자 1/3 능력치로 나와서, 셋을 합치면 일반몹 1마리 몫이다 (2026-11-10)
+                    for (int i = 0; i < GroupSize; i++)
+                        SpawnOne(floor, room, PickNormal(layer), ref nextId, GroupMemberScale);
                     break;
                 case TileType.EliteEnemy:
                     SpawnOne(floor, room, PickElite(layer), ref nextId);
@@ -228,8 +233,16 @@ public static class FloorGenerator
         }
     }
 
-    // 방 안에서 다른 적이 없는 칸을 골라 배치한다 (집단 조우 2마리가 같은 타일에 겹치지 않게)
-    private static void SpawnOne(DungeonFloor floor, RoomInfo room, string templateId, ref int nextId)
+    public const int   GroupSize        = 3;
+    public const float GroupMemberScale = 1f / GroupSize;
+
+    // 층별로 일반 방에 두 번째 일반몹이 같이 나올 확률 (1층, 2층, 3층). Tools/BalanceSim이 이 배열을 그대로 읽는다.
+    private static readonly float[] NormalPairChances = { 0f, 0.30f, 0.60f };
+    public static float NormalPairChance(int layer) =>
+        NormalPairChances[Mathf.Clamp(layer, 1, NormalPairChances.Length) - 1];
+
+    // 방 안에서 다른 적이 없는 칸을 골라 배치한다 (집단 조우 무리원이 같은 타일에 겹치지 않게)
+    private static void SpawnOne(DungeonFloor floor, RoomInfo room, string templateId, ref int nextId, float statScale = 1f)
     {
         var freeCells = new List<(int x, int y)>();
         for (int x = room.x; x < room.x + room.w; x++)
@@ -237,7 +250,7 @@ public static class FloorGenerator
                 if (floor.EnemyAt(x, y) == null)
                     freeCells.Add((x, y));
 
-        if (freeCells.Count == 0) return; // 방이 가득 참 (최소 방 크기 3×3 > 방당 최대 적 2마리라 실제로는 발생하지 않음)
+        if (freeCells.Count == 0) return; // 방이 가득 참 (최소 방 크기 3×3 = 9칸 > 방당 최대 적 3마리라 실제로는 발생하지 않음)
 
         var cell = freeCells[Random.Range(0, freeCells.Count)];
         floor.Enemies.Add(new EnemySpawn
@@ -247,6 +260,7 @@ public static class FloorGenerator
             enemyTemplateId = templateId,
             x = cell.x,
             y = cell.y,
+            statScale = statScale,
         });
     }
 

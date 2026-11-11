@@ -90,10 +90,11 @@ public class BattleUI : MonoBehaviour
             ? BattleManager.Instance.CurrentCost : player.maxCost;
         playerCostText.text = BuildCostPips(currentCost, player.maxCost);
 
-        var sb = new System.Text.StringBuilder();
+        var sb = new System.Text.StringBuilder($"Lv {player.level}  ");
         if (player.poisonStack   > 0) sb.Append($"독 {player.poisonStack}  ");
         if (player.burnStack     > 0) sb.Append($"화상 {player.burnStack}  ");
-        if (player.strengthStack > 0) sb.Append($"힘 +{player.strengthStack}");
+        if (player.strengthStack > 0) sb.Append($"힘 +{player.strengthStack}  ");
+        if (player.UsesMana)          sb.Append($"마나 {player.manaStack}");
         playerStatusText.text = sb.ToString().TrimEnd();
     }
 

@@ -13,6 +13,11 @@ public static class PlayerDatabase
             maxCost            = 3,
             startHandSize      = 5,
             baseAttackBonus    = 2,
+            baseBlockBonus     = 2,
+            manaPerKill        = 0,
+            hpPerLevel         = 6,      // 레벨업 성장 - 전사: 체력·방어 위주
+            attackPerLevel     = 0.5f,
+            blockPerLevel      = 0.5f,
             starterDeckCardIds = new[]
             {
                 "strike","strike","strike","strike","strike",
@@ -25,10 +30,15 @@ public static class PlayerDatabase
         {
             characterClass     = CharacterClass.Rogue,
             displayName        = "도적",
-            maxHp              = 65,
+            maxHp              = 55,
             maxCost            = 3,
             startHandSize      = 6,
-            baseAttackBonus    = 0,
+            baseAttackBonus    = 6,
+            baseBlockBonus     = -1,
+            manaPerKill        = 0,
+            hpPerLevel         = 3,      // 레벨업 성장 - 도적: 공격 위주
+            attackPerLevel     = 1f,
+            blockPerLevel      = 0f,
             starterDeckCardIds = new[]
             {
                 "dagger","dagger","dagger","dagger","dagger","dagger",
@@ -41,10 +51,15 @@ public static class PlayerDatabase
         {
             characterClass     = CharacterClass.Mage,
             displayName        = "마법사",
-            maxHp              = 55,
+            maxHp              = 45,
             maxCost            = 4,
             startHandSize      = 5,
             baseAttackBonus    = 0,
+            baseBlockBonus     = 0,
+            manaPerKill        = 1,
+            hpPerLevel         = 2,      // 레벨업 성장 - 마법사: 체력만 조금, 성장은 마나로
+            attackPerLevel     = 0f,
+            blockPerLevel      = 0f,
             starterDeckCardIds = new[]
             {
                 "fireball","fireball","fireball","fireball",
@@ -58,10 +73,15 @@ public static class PlayerDatabase
         {
             characterClass     = CharacterClass.Paladin,
             displayName        = "성기사",
-            maxHp              = 70,
+            maxHp              = 72,
             maxCost            = 3,
             startHandSize      = 5,
-            baseAttackBonus    = 1,
+            baseAttackBonus    = 2,
+            baseBlockBonus     = 1,
+            manaPerKill        = 0,
+            hpPerLevel         = 5,      // 레벨업 성장 - 성기사: 전사보다 체력·방어가 조금 덜 오름
+            attackPerLevel     = 0.5f,
+            blockPerLevel      = 0.34f,
             starterDeckCardIds = new[]
             {
                 "holy_strike","holy_strike","holy_strike","holy_strike",

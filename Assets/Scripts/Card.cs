@@ -63,8 +63,9 @@ public class Card
 
         if (block > 0)
         {
-            int bonus = player != null ? player.ConsumePendingDefenseBonus() : 0;
-            caster.AddBlock(block + bonus);
+            // 예약 보너스(성소 가호) + 직업 방어력. 방어력이 음수인 직업(도적)도 방어막이 0 아래로 내려가진 않는다.
+            int bonus = player != null ? player.ConsumePendingDefenseBonus() + player.blockBonus : 0;
+            caster.AddBlock(System.Math.Max(0, block + bonus));
         }
         if (healAmount > 0)                      caster.Heal(healAmount);
         if (strengthGain > 0 && player != null)  player.strengthStack += strengthGain;

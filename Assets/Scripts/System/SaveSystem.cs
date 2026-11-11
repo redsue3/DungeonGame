@@ -16,6 +16,9 @@ public class SaveData
     public int   hunger;
     public int   maxHunger;
     public int   currentMana = -1; // 현재 코스트(currentCost). -1 = 필드가 없던 구버전 세이브 표시 → 로드 시 최대 코스트로 복원
+    public int   manaStack;        // 마법사의 누적 마나 (위 currentMana와 다른 것 - 이름이 비슷해 헷갈림 주의). 구버전 세이브는 0
+    public int   level;            // 레벨 (LevelSystem). 구버전 세이브는 0 → 1레벨로 복원
+    public int   xp;
     public CardSnapshot[] deckCards;
     public string[] relicIds;
     public string[] foodIds;
@@ -64,6 +67,9 @@ public static class SaveSystem
             hunger         = player.hunger,
             maxHunger      = player.maxHunger,
             currentMana    = player.currentCost,
+            manaStack      = player.manaStack,
+            level          = player.level,
+            xp             = player.xp,
             deckCards      = ExtractDeckSnapshots(player.deck),
             relicIds       = player.relics.GetAll().ToArray(),
             foodIds        = ExtractFoodIds(player.inventory),
@@ -104,6 +110,9 @@ public static class SaveSystem
             }
         }
 
+        // 레벨 성장치(최대 HP·공격·방어)는 유물 상시 효과 다음, 현재 HP 복원 전에 다시 적용해야 최대 HP가 저장 당시와 같아진다
+        player.RestoreLevel(data.level, data.xp);
+
         player.currentHp     = Mathf.Min(data.currentHp, player.maxHp);
         player.gold          = data.gold;
         player.poisonStack   = data.poisonStack;
@@ -112,6 +121,7 @@ public static class SaveSystem
         player.hunger        = data.maxHunger > 0 ? data.hunger    : HungerSystem.MaxHunger;
         player.maxHunger     = data.maxHunger > 0 ? data.maxHunger : HungerSystem.MaxHunger;
         player.currentCost   = data.currentMana >= 0 ? Mathf.Min(data.currentMana, player.maxCost) : player.maxCost;
+        player.manaStack     = data.manaStack;
 
         // 덱 복원 - CardDatabase에 등록된 카드는 최신 밸런스로, 성소 카드처럼
         // 등록되지 않은 카드는 저장된 스냅샷 그대로 복원한다.

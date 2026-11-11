@@ -147,7 +147,7 @@ public class BattleManager : MonoBehaviour
         player.deck.PlayCard(handIndex, BuildTargets(card, target), player, player.GetFinalAttackBonus());
         Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{player.currentCost}");
 
-        CheckNewKills();
+        CheckNewKills(lastHitByCard: true); // 카드로 직접 쓰러뜨림 = 막타 → 마법사 마나
         CheckHpBelowTriggers(); // 자해 카드로 HP 30% 이하가 될 수 있다
 
         if (enemies.TrueForAll(e => !e.IsAlive))
@@ -300,13 +300,19 @@ public class BattleManager : MonoBehaviour
     }
 
     // 새로 죽은 적 확인 → OnKill 유물 발동 (카드 처치뿐 아니라 독/화상 등 상태이상 처치 포함)
-    private void CheckNewKills()
+    // lastHitByCard: 플레이어가 카드로 직접 마지막 일격을 넣었을 때만 true - 마법사 마나는 이때만 쌓인다(독·화상 처치 제외).
+    private void CheckNewKills(bool lastHitByCard = false)
     {
         foreach (Enemy e in enemies)
         {
             if (e.IsAlive || rewardedKills.Contains(e)) continue;
             rewardedKills.Add(e);
             ApplyRelicTrigger(RelicTrigger.OnKill);
+            if (lastHitByCard)
+            {
+                player.GainManaFromLastHit();
+                player.GainXp(LevelSystem.XpFor(e)); // 막타 경험치 → 레벨업 시 HP·공격·방어 상승 (LevelSystem)
+            }
         }
     }
 

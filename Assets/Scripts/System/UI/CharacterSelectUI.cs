@@ -62,10 +62,12 @@ public class CharacterSelectUI : MonoBehaviour
         if (data == null) return;
 
         classNameText.text    = data.displayName;
-        hpText.text           = $"HP  {data.maxHp}";
+        hpText.text           = $"HP  {data.maxHp}  (레벨업 +{data.hpPerLevel})";
         costText.text         = $"코스트  {data.maxCost}";
         handSizeText.text     = $"시작 패  {data.startHandSize}장";
-        attackBonusText.text  = $"공격 보너스  +{data.baseAttackBonus}";
+        // 같은 줄에 방어 보너스(직업 방어력)와 마법사의 마나 성장을 함께 적는다 - 새 UI 요소를 만들지 않으려고
+        attackBonusText.text  = $"공격 +{data.baseAttackBonus}  방어 {data.baseBlockBonus:+0;-0;0}"
+                              + (data.manaPerKill > 0 ? $"  막타마다 마나 +{data.manaPerKill}" : "");
         confirmBtnText.text   = $"{data.displayName} 선택";
 
         // 스타터 카드 목록

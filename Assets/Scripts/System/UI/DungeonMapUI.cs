@@ -43,7 +43,7 @@ public class DungeonMapUI : MonoBehaviour
     private static readonly Dictionary<TileType, string> roomIcon = new Dictionary<TileType, string>
     {
         [TileType.NormalEnemy] = "적",
-        [TileType.GroupEnemy]  = "적×2",
+        [TileType.GroupEnemy]  = "적×3",
         [TileType.EliteEnemy]  = "정예",
         [TileType.Boss]        = "보스",
         [TileType.Rest]        = "휴식",
@@ -156,7 +156,9 @@ public class DungeonMapUI : MonoBehaviour
         var p = DungeonManager.Instance?.Player;
         if (p == null) return;
 
-        playerHpText.text    = $"HP  {p.currentHp} / {p.maxHp}";
+        // 레벨은 HP 줄에 같이 - 상단바에 새 텍스트 칸을 만들지 않으려고 (최대 레벨이면 경험치 생략)
+        playerHpText.text    = $"HP  {p.currentHp} / {p.maxHp}   Lv {p.level}"
+                             + (p.level < LevelSystem.MaxLevel ? $" ({p.xp}/{p.XpToNext})" : "");
         playerGoldText.text  = $"골드  {p.gold}";
         if (playerHungerText != null)
             playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " (위험!)" : "");
