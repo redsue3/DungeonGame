@@ -34,7 +34,8 @@ const SEED = parseInt(argVal('--seed', '20261110'), 10);
 
 // ---------- 목표 (사용자 지정) ----------
 // growLag: 층마다 적 성장률 = 플레이어 성장률 - growLag (2026-11-11 사용자 요청: 똑같이 키우면 적이 너무 강하다)
-const TARGET = { normalMin: 0.40, normalMax: 0.70, elite: 0.90, boss: 1.10, growLag: 0.05 };
+// elite: 2026-11-11 사용자 요청으로 90% -> 72% (능력치 20% 낮춤) - 만전 상태면 1층부터 이길 수 있게
+const TARGET = { normalMin: 0.40, normalMax: 0.70, elite: 0.72, boss: 1.10, growLag: 0.05 };
 const FIGHT_TURNS = 4;        // 방어막을 체력으로 환산할 때 쓰는 기준 전투 길이
 const BOSS_TURNS = 6;         // 보스 패턴 평균을 낼 때 보는 턴 수
 const BATTLES_PER_CHECK = 20; // 체크포인트마다 런당 측정 전투 수
@@ -401,6 +402,21 @@ function offerCards(run, layer, count) {
   for (const id of ids) { const s = cardScore(CARDS[id], run.atk); if (s > bestS) { bestS = s; best = id; } }
   if (best && bestS >= deckMeanScore(run.deck, run.atk) * 0.95) run.deck.push(clone(CARDS[best]));
 }
+// 보물상자 (TreasureTable.cs). 런 진행에선 미믹 전투를 이긴다고 보고, 함정·음식은 전투력에 영향이 없어 건너뛴다.
+const TREASURE = (() => { let src; try { src = read('Database/TreasureTable.cs'); } catch (e) { return null; }
+  const c = k => +new RegExp('const (?:int|float)\\s+' + k + '\\s*=\\s*([\\d.]+)').exec(src)[1];
+  return { chests: c('ChestsPerFloor'), loot: c('FloorLootPerFloor'),
+    w: { gold: c('WeightGold'), card: c('WeightCard'), food: c('WeightFood'), relic: c('WeightRelic'), mimic: c('WeightMimic'), trap: c('WeightTrap') },
+    goldMin: c('ChestGoldMinPerLayer'), goldMax: c('ChestGoldMaxPerLayer'), mimicRelic: c('MimicRelicChance'),
+    lootGoldPct: c('LootGoldChancePercent'), lootMin: c('LootGoldMinPerLayer'), lootMax: c('LootGoldMaxPerLayer') }; })();
+function openChest(run, L) {
+  const w = TREASURE.w, total = w.gold + w.card + w.food + w.relic + w.mimic + w.trap; let r = rng() * total;
+  if ((r -= w.gold) < 0) { run.gold += Math.round(L * rInt(TREASURE.goldMin, TREASURE.goldMax + 1) * (1 + run.goldPct / 100)); return; }
+  if ((r -= w.card) < 0) { offerCards(run, L, 3); return; }
+  if ((r -= w.food) < 0) return;
+  if ((r -= w.relic) < 0) { gainRelic(run, false); return; }
+  if ((r -= w.mimic) < 0) { battleRewards(run, [pick(FLOOR.normal[L - 1])], 'normal'); if (rng() < TREASURE.mimicRelic) gainRelic(run, false); return; }
+}
 function gainRelic(run, isBoss) {
   const avail = RELICS.filter(r => !run.relics.includes(r.id) && (isBoss || r.rarity !== 'Boss'));
   if (!avail.length) return;
@@ -463,6 +479,7 @@ function simulateRun(cls) {
     const normals = L === 1 ? 5 : 6;
     for (let i = 0; i < normals; i++) rooms.push('normal');
     rooms.push('group', 'group', 'elite', 'shop'); if (L === 1) rooms.push('shrine');
+    if (TREASURE) { for (let i = 0; i < TREASURE.chests; i++) rooms.push('chest'); for (let i = 0; i < TREASURE.loot; i++) rooms.push('loot'); }
     for (let i = rooms.length - 1; i > 0; i--) { const j = rInt(0, i + 1); [rooms[i], rooms[j]] = [rooms[j], rooms[i]]; }
     for (const r of rooms) {
       if (r === 'normal') battleRewards(run, rng() < FLOOR.pair[L - 1] ? [pick(FLOOR.normal[L - 1]), pick(FLOOR.normal[L - 1])] : [pick(FLOOR.normal[L - 1])], 'normal');
@@ -470,6 +487,8 @@ function simulateRun(cls) {
       else if (r === 'elite') battleRewards(run, [pick(FLOOR.elite[L - 1])], 'elite');
       else if (r === 'shop') shop(run);
       else if (r === 'shrine') shrine(run);
+      else if (r === 'chest') openChest(run, L);
+      else if (r === 'loot') { if (rng() * 100 < TREASURE.lootGoldPct) run.gold += Math.round(L * rInt(TREASURE.lootMin, TREASURE.lootMax + 1) * (1 + run.goldPct / 100)); }
     }
     snaps.push(snapshot(run));
     battleRewards(run, [FLOOR.boss[L - 1]], 'boss');

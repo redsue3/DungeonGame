@@ -898,3 +898,19 @@ campfire with crossed logs inside a ring of stones, warm orange glow, bedroll be
 ancient stone altar shrine with a glowing golden rune, offering candles, dark fantasy dungeon
 ```
 
+### 보물상자 — `Map/chest.png`
+
+도구: 맵 오브젝트 (Create map object)
+
+```
+small wooden treasure chest with iron bands and a gold lock, slightly worn, dark fantasy dungeon
+```
+
+### 바닥 보상 — `Map/floor_loot.png`
+
+도구: 맵 오브젝트 (Create map object)
+
+```
+small pile of gold coins and a tiny leather pouch on stone floor, dark fantasy dungeon
+```
+
