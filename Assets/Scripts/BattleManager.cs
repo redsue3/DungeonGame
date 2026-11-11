@@ -2,123 +2,111 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// PlayerTurn = 플레이어 입력을 받는 중(공격 턴이든 정비 중이든), EnemyTurn = 시간이 흐르며 적이 움직이는 중(입력 막음)
 public enum BattleState { PlayerTurn, EnemyTurn, Win, Lose, Fled }
 
+// 플레이어 쪽 단계 (2026-11-11 시간 기반 전투)
+//   Attack  : 공격 턴 - 이동 속도 정상, 카드 사용 가능, 코스트 최대치
+//   Recovery: 정비 중 - 이동이 느려지고(시간 2배), 카드 사용 불가. 들어갈 때 남은 덱에서 손패를 채운다
+public enum PlayerPhase { Attack, Recovery }
+
+// 픽셀 던전식 시간 기반 전투 + 덱.
+// 전투는 '시간'으로 흐른다. 플레이어가 이동하거나 카드를 쓰면 그만큼 시간이 지나고, 적은 자기 속도(Enemy.speed)에 맞춰
+// 그 사이사이에 행동한다. 플레이어가 아무것도 안 하면 시간도 멈춰 있다(턴제 로그라이크와 같은 감각).
+// 플레이어는 공격 턴과 정비 시간을 번갈아 갖는다:
+//   공격 턴 → (턴 종료 버튼 또는 코스트 소진) → 정비: 이동 느려짐 + 카드 사용 불가 + 남은 덱에서 손패 채우기
+//   정비가 RecoveryDuration만큼 지나면 → 다시 공격 턴: 이동 속도 복귀 + 공격 가능 + 코스트 복구
 public class BattleManager : MonoBehaviour
 {
     public static BattleManager Instance;
 
+    // ── 시간 규칙 (플레이 해 보고 조정할 숫자들) ──────────────────────
+    // 속도 1인 적은 시간 1마다 한 번 행동한다. 그 사이 공격 턴엔 2칸 이동 또는 카드 4장, 정비 중엔 1칸 이동.
+    // 2026-11-11 후보 6개를 실제 전투 코드로 돌려(1층 시작 덱, 직업 4종) 예전 턴 방식에 맞춘 난이도와 가장 가까운 값을 골랐다:
+    //   일반 1마리 승률 100%·체력 17% 손실, 2마리 73%, 엘리트 86%, 보스 76% (예전: 100%·18%, 65%, 76%, 72%)
+    // 카드 1장 = 시간 1로 두면 카드마다 적이 한 번씩 때려서 일반몹 1마리에게도 승률이 34%로 떨어졌다.
+    public static float MoveTime         = 0.5f;  // 공격 턴에 한 칸 이동
+    public static float RecoveryMoveTime = 1f;    // 정비 중 한 칸 이동 (이속 감소 - 공격 턴의 2배 느림)
+    public static float CardTime         = 0.25f; // 카드 한 장 사용
+    public static float RecoveryDuration = 0.5f;  // 정비 시간 길이 ('잠시' 덱 사용 불가)
+
     private PlayerCharacter  player;
     private List<Enemy>      enemies = new List<Enemy>();
     private BattleState      state;
-    private bool             playerTurnEnded;
-    private bool             firstPlayerTurn;   // 전투 첫 턴은 맵에서 들고 온 코스트/방어막을 그대로 쓴다 (리필/블록 초기화 없음)
-    private int              costRefillPenalty; // 코스트 소진으로 턴이 자동 종료됐을 때, 다음 턴 리필량에서 깎이는 "리필 틈" 페널티
+    private bool             battleOver;
     private HashSet<string>  usedOnceRelics = new HashSet<string>(); // 전투당 1회만 발동하는 유물(불사조의 재 등)
     private HashSet<Enemy>   rewardedKills  = new HashSet<Enemy>();  // OnKill 유물을 이미 발동시킨 적 (중복 발동 방지)
 
     // 4단계(전투 그리드 통합) - 전투가 벌어지는 방과 그 방이 속한 층. 이동/도주/사거리 판정에 쓴다.
     private DungeonFloor     floor;
     private RoomInfo         room;
-    private bool             hasMovedThisTurn; // 턴당 이동은 1칸만 (카드 코스트와 별개의 자원)
 
-    private const int CostDrainPenalty = 1;
+    // 시간
+    private float            battleTime;
+    private float            recoveryEndsAt;
+    private bool             busy;              // 시간이 흐르는 중(적 행동 연출) - 이 동안엔 입력을 받지 않는다
 
-    public int         CurrentCost      => player != null ? player.currentCost : 0;
-    public BattleState CurrentState     => state;
-    public bool         HasMovedThisTurn => hasMovedThisTurn;
-    public RoomInfo    Room             => room;
+    public int         CurrentCost  => player != null ? player.currentCost : 0;
+    public BattleState CurrentState => state;
+    public PlayerPhase Phase        { get; private set; }
+    public bool        CanAct       => state == BattleState.PlayerTurn && !busy && !battleOver;
+    public float       BattleTime   => battleTime;
+    public float       RecoveryLeft => Phase == PlayerPhase.Recovery ? Mathf.Max(0f, recoveryEndsAt - battleTime) : 0f;
+    public float       CurrentMoveTime => Phase == PlayerPhase.Attack ? MoveTime : RecoveryMoveTime;
+    public RoomInfo    Room         => room;
     public List<Enemy> GetEnemies() => enemies;
+    public float       TimeUntilAct(Enemy e) => Mathf.Max(0f, e.nextActTime - battleTime);
 
     void Awake() => Instance = this;
 
     // 집단 조우. dungeonFloor/battleRoom - 전투 중 이동/사거리/도주 판정에 쓰는 그리드 컨텍스트.
     public void StartBattle(PlayerCharacter playerCharacter, List<Enemy> enemyList, DungeonFloor dungeonFloor, RoomInfo battleRoom)
     {
+        StopAllCoroutines();
         player  = playerCharacter;
         enemies = new List<Enemy>(enemyList);
         floor   = dungeonFloor;
         room    = battleRoom;
         usedOnceRelics.Clear();
         rewardedKills.Clear();
-        costRefillPenalty = 0;
-        firstPlayerTurn   = true;
-        hasMovedThisTurn  = false;
+        battleOver = false;
+        busy       = false;
+        battleTime = 0f;
+
+        // 적은 플레이어가 먼저 한 번 움직인 뒤(자기 속도만큼 시간이 지난 뒤)부터 행동한다
+        foreach (Enemy e in enemies) e.nextActTime = 1f / Mathf.Max(0.1f, e.speed);
+
         player.deck.ResetForBattle();
         HungerSystem.OnBattleStart(player);
         ApplyRelicTrigger(RelicTrigger.OnBattleStart);
-        StartCoroutine(BattleLoop());
+
+        // 첫 공격 턴: 맵에서 들고 온 코스트/방어막을 그대로 쓴다 (리필·방어막 초기화 없음), 손패만 뽑는다
+        Phase = PlayerPhase.Attack;
+        player.OnTurnStart(resetBlock: false);
+        CheckHpBelowTriggers();
+        player.deck.DrawCards(player.startHandSize);
+        ApplyRelicTrigger(RelicTrigger.OnTurnStart);
+        state = BattleState.PlayerTurn;
+
+        LogStatus("전투 시작");
+        if (!player.IsAlive) { Finish(BattleState.Lose); return; }
+        NotifyUI();
     }
 
     // 개별 조우 편의 오버로드
     public void StartBattle(PlayerCharacter playerCharacter, Enemy enemy, DungeonFloor dungeonFloor, RoomInfo battleRoom)
         => StartBattle(playerCharacter, new List<Enemy> { enemy }, dungeonFloor, battleRoom);
 
-    private IEnumerator BattleLoop()
-    {
-        state = BattleState.PlayerTurn;
-
-        // Fled는 TryMovePlayer가 직접 세팅하고 끝내는 상태라 여기서 별도 루프 처리는 안 함 -
-        // 조건에서 걸러서 while을 빠져나가게만 하면 된다(안 걸러지면 매 프레임 아무 분기도 안 타는 채로
-        // while이 계속 도는 무한루프에 빠져 에디터가 멈춘다).
-        while (player.IsAlive && enemies.Exists(e => e.IsAlive) && state != BattleState.Fled)
-        {
-            if (state == BattleState.PlayerTurn)
-                yield return StartCoroutine(PlayerTurn());
-            else if (state == BattleState.EnemyTurn)
-                yield return StartCoroutine(EnemyTurn());
-        }
-
-        if (state != BattleState.Fled)
-            state = player.IsAlive ? BattleState.Win : BattleState.Lose;
-        OnBattleEnd();
-    }
-
-    private IEnumerator PlayerTurn()
-    {
-        playerTurnEnded  = false;
-        hasMovedThisTurn = false;
-
-        if (firstPlayerTurn)
-        {
-            // 첫 턴: 맵에서 들고 온 코스트/방어막으로 그대로 시작 (풀 리필은 2턴부터 - 맵 카드 사용의 대가)
-            firstPlayerTurn = false;
-            player.OnTurnStart(resetBlock: false);
-        }
-        else
-        {
-            player.OnTurnStart();
-            int penalty = costRefillPenalty;
-            costRefillPenalty = 0;
-            player.currentCost = Mathf.Max(0, player.maxCost - penalty);
-            if (penalty > 0) Debug.Log($"[BattleManager] 리필 틈 페널티 적용 — 이번 턴 코스트 -{penalty}");
-        }
-
-        CheckHpBelowTriggers();
-        if (!player.IsAlive) yield break; // 독/화상으로 턴 시작에 사망 - BattleLoop가 패배 처리
-
-        player.deck.DrawCards(player.startHandSize);
-        ApplyRelicTrigger(RelicTrigger.OnTurnStart);
-
-        foreach (Enemy e in enemies.FindAll(e => e.IsAlive))
-        {
-            EnemyAction next = e.PeekNextAction();
-            Debug.Log($"[{e.characterName} 의도] {next.description}  (HP:{e.currentHp}/{e.maxHp})");
-        }
-        Debug.Log($"=== 플레이어 턴 | 코스트:{player.currentCost}/{player.maxCost} | HP:{player.currentHp}/{player.maxHp} ===");
-        LogHand();
-        NotifyUI();
-
-        // UI에서 EndPlayerTurn() 호출 또는 승패 확정까지 대기
-        yield return new WaitUntil(() => playerTurnEnded || state != BattleState.PlayerTurn);
-    }
-
     private void NotifyUI() => UIManager.Instance?.RefreshBattle();
 
-    // 카드 사용 - UI 버튼에서 호출 (target: 단일 공격 카드가 때릴 적, null이면 첫 번째 생존 적)
+    // ─────────────────────────────────────────
+    // 플레이어 행동 - 전부 시간을 쓴다
+    // ─────────────────────────────────────────
+
+    // 카드 사용 - 공격 턴에만. (target: 단일 공격 카드가 때릴 적, null이면 첫 번째 생존 적)
     public bool UseCard(int handIndex, Enemy target = null)
     {
-        if (state != BattleState.PlayerTurn) return false;
+        if (!CanAct || Phase != PlayerPhase.Attack) return false;
 
         List<Card> hand = player.deck.GetHand();
         if (handIndex < 0 || handIndex >= hand.Count) return false;
@@ -130,8 +118,7 @@ public class BattleManager : MonoBehaviour
             return false;
         }
 
-        // 4단계 - 단일 대상 공격/독/화상 카드는 카드의 사거리(체비쇼프 거리) 안에 있어야 닿는다.
-        // AoE는 방 전체를 때리므로 사거리 무관.
+        // 단일 대상 공격/독/화상 카드는 카드의 사거리(체비쇼프 거리) 안에 있어야 닿는다. AoE는 방 전체.
         bool hasOffense = card.damage > 0 || card.poisonApply > 0 || card.burnApply > 0;
         if (hasOffense && !card.isAoe)
         {
@@ -145,53 +132,44 @@ public class BattleManager : MonoBehaviour
 
         player.currentCost -= card.cost;
         player.deck.PlayCard(handIndex, BuildTargets(card, target), player, player.GetFinalAttackBonus());
-        Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{player.currentCost}");
+        Debug.Log($"[{card.cardName}] 사용 | 남은 코스트:{player.currentCost} | 시간 {battleTime:0.0}");
 
-        CheckNewKills(lastHitByCard: true); // 카드로 직접 쓰러뜨림 = 막타 → 마법사 마나
-        CheckHpBelowTriggers(); // 자해 카드로 HP 30% 이하가 될 수 있다
+        CheckNewKills(lastHitByCard: true); // 카드로 직접 쓰러뜨림 = 막타 → 마법사 마나·경험치
+        CheckHpBelowTriggers();             // 자해 카드로 HP 30% 이하가 될 수 있다
 
-        if (enemies.TrueForAll(e => !e.IsAlive))
-        {
-            state = BattleState.Win;
-        }
-        else if (!player.IsAlive)
-        {
-            // 자해 카드로 자기 턴 중에 사망 - 턴 종료를 기다리지 않고 즉시 패배 처리
-            state = BattleState.Lose;
-        }
-        // 이 카드로 코스트를 완전히 소진하면 턴이 자동으로 끝나고, 다음 턴 리필에 "틈"(페널티)이 생긴다.
-        // 원래 0인 상태에서 0코스트 카드를 낸 경우는 소진이 아니므로 해당 없음.
-        else if (card.cost > 0 && player.currentCost == 0)
-        {
-            costRefillPenalty = CostDrainPenalty;
-            Debug.Log("[BattleManager] 코스트 소진 — 턴 자동 종료 (다음 턴 리필 -1)");
-            EndPlayerTurn();
-        }
+        if (enemies.TrueForAll(e => !e.IsAlive)) { Finish(BattleState.Win);  return true; }
+        if (!player.IsAlive)                     { Finish(BattleState.Lose); return true; }
 
-        NotifyUI();
+        // 코스트를 다 쓰면 이 카드 시간이 지난 뒤 자동으로 정비에 들어간다
+        bool drained = card.cost > 0 && player.currentCost <= 0;
+        StartCoroutine(SpendTime(CardTime, enterRecoveryAfter: drained));
         return true;
     }
 
-    // 턴 종료 - UI 버튼에서 호출
+    // 턴 종료 버튼 - 공격 턴이면 정비에 들어가고, 정비 중이면 남은 정비 시간을 그대로 흘려보낸다(정비 넘기기)
     public void EndPlayerTurn()
     {
-        if (state != BattleState.PlayerTurn) return;
-        player.deck.DiscardHand();
-        state = BattleState.EnemyTurn;
-        playerTurnEnded = true;
-        NotifyUI();
+        if (!CanAct) return;
+
+        if (Phase == PlayerPhase.Attack)
+        {
+            EnterRecovery();
+            NotifyUI();
+        }
+        else
+        {
+            StartCoroutine(SpendTime(Mathf.Max(0.01f, recoveryEndsAt - battleTime), enterRecoveryAfter: false));
+        }
     }
 
-    // 전투 중 플레이어 이동 - UI(그리드 타일 클릭/WASD)에서 호출. 턴당 1칸만 허용.
+    // 전투 중 플레이어 이동 - UI(그리드 타일 클릭/WASD)에서 호출. 한 칸마다 시간을 쓴다(정비 중엔 2배).
     // 방 밖으로 나가면 도주: 그 순간 인접해 있던 적들의 공격 의도가 Attack이면 이탈 공격이 발동한다.
     public bool TryMovePlayer(int dx, int dy)
     {
-        if (state != BattleState.PlayerTurn || hasMovedThisTurn) return false;
+        if (!CanAct) return false;
 
         var result = BattleGridSystem.TryMovePlayer(floor, room, enemies, dx, dy, out List<Enemy> attackers);
         if (result == BattleGridSystem.MoveResult.Blocked) return false;
-
-        hasMovedThisTurn = true;
 
         if (result == BattleGridSystem.MoveResult.Fled)
         {
@@ -203,56 +181,143 @@ public class BattleManager : MonoBehaviour
                 attacker.ExecuteAction(action, player);
             }
             CheckHpBelowTriggers();
-            state = player.IsAlive ? BattleState.Fled : BattleState.Lose;
+            Finish(player.IsAlive ? BattleState.Fled : BattleState.Lose);
+            return true;
         }
 
-        NotifyUI();
+        StartCoroutine(SpendTime(CurrentMoveTime, enterRecoveryAfter: false));
         return true;
     }
 
-    private IEnumerator EnemyTurn()
+    // ─────────────────────────────────────────
+    // 시간 흐름
+    // ─────────────────────────────────────────
+
+    // 플레이어 행동이 dt만큼 시간을 쓴다 - 그 사이에 행동할 차례가 된 적과 정비 종료를 시간 순서대로 처리한다.
+    private IEnumerator SpendTime(float dt, bool enterRecoveryAfter)
     {
-        foreach (Enemy e in enemies.FindAll(e => e.IsAlive))
+        busy  = true;
+        state = BattleState.EnemyTurn;
+        NotifyUI();
+
+        float target = battleTime + dt;
+        while (!battleOver)
         {
-            e.OnTurnStart();
-            e.ResetBlock();
-            CheckNewKills(); // 독/화상으로 죽어도 OnKill 유물(혈약 반지 등)이 발동해야 한다
+            Enemy next = NextEnemyToAct();
+            float enemyAt    = next != null ? next.nextActTime : float.MaxValue;
+            float recoveryAt = Phase == PlayerPhase.Recovery ? recoveryEndsAt : float.MaxValue;
 
-            if (!e.IsAlive) continue;
-
-            // 다음 의도가 플레이어를 직접 노리는 행동(공격/독/화상)인데 인접하지 않았으면,
-            // 이번 턴엔 공격 대신 방 범위 안에서 한 칸 접근만 한다 - 의도는 소모되지 않고 다음 턴에 그대로 실행된다.
-            // 방어/버프처럼 스스로에게 거는 행동은 거리와 무관하게 그대로 실행.
-            EnemyAction next = e.PeekNextAction();
-            bool targetsPlayer = next.intent == EnemyIntent.Attack || next.intent == EnemyIntent.Poison || next.intent == EnemyIntent.Burn;
-            bool adjacent = BattleGridSystem.Chebyshev(e.x, e.y, floor.PlayerX, floor.PlayerY) <= 1;
-
-            if (targetsPlayer && !adjacent)
+            // 정비 종료와 적 행동이 같은 시각이면 적이 먼저 - 정비 중에 쳐 둔 방어막이 그 공격까지는 막아 준다
+            if (recoveryAt < enemyAt && recoveryAt <= target)
             {
-                BattleGridSystem.StepEnemyToward(floor, room, e, enemies);
-                Debug.Log($"[{e.characterName}] 접근 중... ({e.x},{e.y})");
-                yield return new WaitForSeconds(0.3f);
+                battleTime = recoveryAt;
+                StartAttackTurn();
+                if (battleOver) yield break;
+                NotifyUI();
                 continue;
             }
+            if (enemyAt > target) break;
 
-            Debug.Log($"=== {e.characterName} 턴 | HP:{e.currentHp}/{e.maxHp} ===");
-            yield return new WaitForSeconds(0.4f);
+            battleTime = enemyAt;
+            yield return StartCoroutine(EnemyAct(next));
+        }
+        if (battleOver) yield break;
 
-            EnemyAction action = e.GetNextAction();
-            e.ExecuteAction(action, player);
-            CheckHpBelowTriggers();
+        battleTime = target;
+        if (Phase == PlayerPhase.Recovery && battleTime >= recoveryEndsAt) StartAttackTurn();
+        if (battleOver) yield break;
+        if (enterRecoveryAfter && Phase == PlayerPhase.Attack) EnterRecovery();
 
-            yield return new WaitForSeconds(0.3f);
+        busy  = false;
+        state = BattleState.PlayerTurn;
+        NotifyUI();
+    }
 
-            if (!player.IsAlive)
-            {
-                state = BattleState.Lose;
-                yield break;
-            }
+    private Enemy NextEnemyToAct()
+    {
+        Enemy best = null;
+        foreach (Enemy e in enemies)
+            if (e.IsAlive && (best == null || e.nextActTime < best.nextActTime)) best = e;
+        return best;
+    }
+
+    // 정비 시작 - 이동이 느려지고 카드를 못 쓴다. 버린 카드 더미가 아니라 남은 덱(뽑을 카드)에서 손패를 채운다.
+    // (뽑을 카드가 다 떨어졌을 때만 Deck.DrawCards가 버린 카드를 섞어 넣는다)
+    private void EnterRecovery()
+    {
+        Phase          = PlayerPhase.Recovery;
+        recoveryEndsAt = battleTime + RecoveryDuration;
+        int toDraw = Mathf.Max(0, player.startHandSize - player.deck.GetHand().Count);
+        player.deck.DrawCards(toDraw);
+        LogStatus($"정비 시작 (+{toDraw}장, {RecoveryDuration:0.#} 동안 카드 사용 불가)");
+    }
+
+    // 공격 턴 시작 - 이동 속도 복귀, 공격 가능, 코스트 복구. 방어막 초기화·독/화상은 여기서 한 번 진행된다.
+    private void StartAttackTurn()
+    {
+        Phase = PlayerPhase.Attack;
+        player.OnTurnStart();
+        CheckHpBelowTriggers();
+        if (!player.IsAlive) { Finish(BattleState.Lose); return; }
+
+        player.currentCost = player.maxCost;
+        ApplyRelicTrigger(RelicTrigger.OnTurnStart);
+        LogStatus("공격 턴");
+    }
+
+    // 적 한 번의 행동 - 상태이상 진행 후, 의도가 플레이어를 노리는데 붙어 있지 않으면 한 칸 접근(의도는 남김),
+    // 붙어 있거나 자기에게 거는 행동이면 실행. 다음 행동은 1/속도 만큼 뒤.
+    private IEnumerator EnemyAct(Enemy e)
+    {
+        e.nextActTime += 1f / Mathf.Max(0.1f, e.speed);
+
+        e.OnTurnStart();
+        e.ResetBlock();
+        CheckNewKills(); // 독/화상으로 죽어도 OnKill 유물(혈약 반지 등)이 발동해야 한다
+        if (!e.IsAlive)
+        {
+            if (enemies.TrueForAll(x => !x.IsAlive)) Finish(BattleState.Win);
+            NotifyUI();
+            yield break;
         }
 
-        state = BattleState.PlayerTurn;
+        EnemyAction next = e.PeekNextAction();
+        bool targetsPlayer = next.intent == EnemyIntent.Attack || next.intent == EnemyIntent.Poison || next.intent == EnemyIntent.Burn;
+        bool adjacent = BattleGridSystem.Chebyshev(e.x, e.y, floor.PlayerX, floor.PlayerY) <= 1;
+
+        if (targetsPlayer && !adjacent)
+        {
+            BattleGridSystem.StepEnemyToward(floor, room, e, enemies);
+            Debug.Log($"[{e.characterName}] 접근 중... ({e.x},{e.y}) 시간 {battleTime:0.0}");
+            NotifyUI();
+            yield return new WaitForSeconds(0.25f);
+            yield break;
+        }
+
+        NotifyUI();
+        yield return new WaitForSeconds(0.3f);
+
+        EnemyAction action = e.GetNextAction();
+        e.ExecuteAction(action, player);
+        CheckHpBelowTriggers();
+        NotifyUI();
+        yield return new WaitForSeconds(0.25f);
+
+        if (!player.IsAlive) Finish(BattleState.Lose);
     }
+
+    // 전투 끝 - 한 번만
+    private void Finish(BattleState result)
+    {
+        if (battleOver) return;
+        battleOver = true;
+        busy       = false;
+        state      = result;
+        OnBattleEnd();
+    }
+
+    private void LogStatus(string what) =>
+        Debug.Log($"=== {what} | 시간 {battleTime:0.0} | 코스트 {player.currentCost}/{player.maxCost} | HP {player.currentHp}/{player.maxHp} | 손패 {player.deck.GetHand().Count} ===");
 
     private void OnBattleEnd()
     {
@@ -292,15 +357,8 @@ public class BattleManager : MonoBehaviour
         return resolved != null ? new List<Character> { resolved } : new List<Character>();
     }
 
-    private void LogHand()
-    {
-        var hand = player.deck.GetHand();
-        for (int i = 0; i < hand.Count; i++)
-            Debug.Log($"  [{i}] {hand[i].cardName} (코스트:{hand[i].cost}) - {hand[i].description}");
-    }
-
     // 새로 죽은 적 확인 → OnKill 유물 발동 (카드 처치뿐 아니라 독/화상 등 상태이상 처치 포함)
-    // lastHitByCard: 플레이어가 카드로 직접 마지막 일격을 넣었을 때만 true - 마법사 마나는 이때만 쌓인다(독·화상 처치 제외).
+    // lastHitByCard: 플레이어가 카드로 직접 마지막 일격을 넣었을 때만 true - 마법사 마나·경험치는 이때만 쌓인다(독·화상 처치 제외).
     private void CheckNewKills(bool lastHitByCard = false)
     {
         foreach (Enemy e in enemies)

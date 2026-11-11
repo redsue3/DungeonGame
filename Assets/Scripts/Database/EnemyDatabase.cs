@@ -28,7 +28,7 @@ public static class EnemyDatabase
 
         ["thief"] = new EnemyData
         {
-            id = "thief", displayName = "도둑", hp = 35, baseAttack = 0,
+            id = "thief", displayName = "도둑", hp = 35, baseAttack = 0, speed = 1.25f,
             rewardGoldMin = 7, rewardGoldMax = 12, isElite = false, isBoss = false,
             phases = new[]
             {
@@ -44,7 +44,7 @@ public static class EnemyDatabase
 
         ["bat_swarm"] = new EnemyData
         {
-            id = "bat_swarm", displayName = "박쥐떼", hp = 25, baseAttack = 0,
+            id = "bat_swarm", displayName = "박쥐떼", hp = 25, baseAttack = 0, speed = 1.5f,
             rewardGoldMin = 5, rewardGoldMax = 9, isElite = false, isBoss = false,
             phases = new[]
             {
@@ -130,7 +130,7 @@ public static class EnemyDatabase
         // ─────────────────────────────────────────
         ["giant_slime_boss"] = new EnemyData
         {
-            id = "giant_slime_boss", displayName = "거대 슬라임", hp = 90, baseAttack = 0,
+            id = "giant_slime_boss", displayName = "거대 슬라임", hp = 90, baseAttack = 0, speed = 0.8f,
             rewardGoldMin = 35, rewardGoldMax = 45, isElite = false, isBoss = true,
             phases = new[]
             {
@@ -221,7 +221,7 @@ public static class EnemyDatabase
 
         ["swamp_viper"] = new EnemyData
         {
-            id = "swamp_viper", displayName = "늪지 독사", hp = 41, baseAttack = 0,
+            id = "swamp_viper", displayName = "늪지 독사", hp = 41, baseAttack = 0, speed = 1.25f,
             rewardGoldMin = 8, rewardGoldMax = 13, isElite = false, isBoss = false,
             phases = new[]
             {
@@ -350,7 +350,7 @@ public static class EnemyDatabase
 
         ["bone_golem"] = new EnemyData
         {
-            id = "bone_golem", displayName = "뼈 골렘", hp = 97, baseAttack = 0,
+            id = "bone_golem", displayName = "뼈 골렘", hp = 97, baseAttack = 0, speed = 0.75f,
             rewardGoldMin = 15, rewardGoldMax = 22, isElite = false, isBoss = false,
             phases = new[]
             {
@@ -365,7 +365,7 @@ public static class EnemyDatabase
 
         ["wraith"] = new EnemyData
         {
-            id = "wraith", displayName = "원혼", hp = 58, baseAttack = 0,
+            id = "wraith", displayName = "원혼", hp = 58, baseAttack = 0, speed = 1.25f,
             rewardGoldMin = 13, rewardGoldMax = 19, isElite = false, isBoss = false,
             phases = new[]
             {

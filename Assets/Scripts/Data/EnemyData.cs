@@ -10,6 +10,7 @@ public class EnemyData
     public int    rewardGoldMax;
     public bool   isElite;
     public bool   isBoss;
+    public float  speed = 1f;   // 전투 속도 (1 = 시간 1마다 한 번 행동). 박쥐떼처럼 빠른 적은 1보다 크게
     public EnemyPhaseData[] phases;
 }
 

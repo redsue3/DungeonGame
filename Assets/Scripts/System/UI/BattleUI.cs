@@ -58,8 +58,11 @@ public class BattleUI : MonoBehaviour
 
     void Update()
     {
-        if (BattleManager.Instance == null || BattleManager.Instance.CurrentState != BattleState.PlayerTurn) return;
+        // 시간이 흐르는 중(적 행동 연출)에는 입력을 받지 않는다
+        if (BattleManager.Instance == null || !BattleManager.Instance.CanAct) return;
 
+        // 턴 종료 / 정비 넘기기. Space는 Unity가 마지막으로 누른 버튼(턴 종료)까지 같이 눌러 두 번 처리될 수 있어 E로 둔다
+        if (Input.GetKeyDown(KeyCode.E)) { OnEndTurn(); return; }
         if (Input.GetKeyDown(KeyCode.UpArrow)    || Input.GetKeyDown(KeyCode.W)) TryMove(0, 1);
         else if (Input.GetKeyDown(KeyCode.DownArrow)  || Input.GetKeyDown(KeyCode.S)) TryMove(0, -1);
         else if (Input.GetKeyDown(KeyCode.LeftArrow)  || Input.GetKeyDown(KeyCode.A)) TryMove(-1, 0);
@@ -74,6 +77,26 @@ public class BattleUI : MonoBehaviour
         RefreshEnemies();
         RefreshHand();
         RefreshGrid();
+        RefreshTurnInfo();
+    }
+
+    // 공격 턴 / 정비 중 표시와 버튼 (2026-11-11 시간 기반 전투)
+    private void RefreshTurnInfo()
+    {
+        var bm = BattleManager.Instance;
+        if (bm == null) return;
+
+        bool attack = bm.Phase == PlayerPhase.Attack;
+        if (turnText != null)
+        {
+            turnText.text = !bm.CanAct && bm.CurrentState == BattleState.EnemyTurn ? $"시간 흐르는 중…  (시간 {bm.BattleTime:0.0})"
+                          : attack ? $"공격 턴  ·  시간 {bm.BattleTime:0.0}"
+                                   : $"정비 중  ·  {bm.RecoveryLeft:0.0} 남음 (카드 사용 불가, 이동 느림)";
+        }
+
+        endTurnBtn.interactable = bm.CanAct;
+        var label = endTurnBtn.GetComponentInChildren<TextMeshProUGUI>();
+        if (label != null) label.text = attack ? "턴 종료" : "정비 넘기기";
     }
 
     private void RefreshPlayerStatus()
@@ -122,8 +145,11 @@ public class BattleUI : MonoBehaviour
             var btn = obj.GetComponent<Button>();
             if (btn != null)
             {
-                int currentCost = BattleManager.Instance?.CurrentCost ?? 0;
-                btn.interactable = card.cost <= currentCost && InRangeOfTarget(card);
+                var bmgr = BattleManager.Instance;
+                int currentCost = bmgr?.CurrentCost ?? 0;
+                // 카드는 공격 턴에만 (정비 중엔 손패가 보이기만 하고 못 쓴다)
+                bool attackTurn = bmgr != null && bmgr.CanAct && bmgr.Phase == PlayerPhase.Attack;
+                btn.interactable = attackTurn && card.cost <= currentCost && InRangeOfTarget(card);
                 btn.onClick.AddListener(() =>
                 {
                     BattleManager.Instance?.UseCard(idx, selectedTarget);
@@ -239,7 +265,7 @@ public class BattleUI : MonoBehaviour
     private void RepaintGridTiles(DungeonFloor floor, BattleManager bm)
     {
         var enemies = bm.GetEnemies();
-        bool canAct = bm.CurrentState == BattleState.PlayerTurn && !bm.HasMovedThisTurn;
+        bool canAct = bm.CanAct; // 이동은 횟수 제한 없이 한 칸마다 시간을 쓴다 (공격 턴 1, 정비 중 2)
 
         foreach (var kv in battleTileObjects)
         {
@@ -294,8 +320,9 @@ public class BattleUI : MonoBehaviour
         }
 
         if (moveHintText != null)
-            moveHintText.text = bm.HasMovedThisTurn ? "이동 완료 (다음 턴에 다시 이동 가능)"
-                                                     : "인접 칸 클릭 또는 WASD로 이동 - 방 밖으로 나가면 도주";
+            moveHintText.text = bm.Phase == PlayerPhase.Attack
+                ? $"이동 1칸 = 시간 {BattleManager.MoveTime:0.##}, 카드 1장 = 시간 {BattleManager.CardTime:0.##} · E 턴 종료 · 방 밖으로 나가면 도주"
+                : $"정비 중 이동 1칸 = 시간 {BattleManager.RecoveryMoveTime:0.##} · E 정비 넘기기";
     }
 
     private string BuildCostPips(int current, int max)

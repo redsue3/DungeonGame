@@ -33,6 +33,7 @@ public static class EnemyFactory
         enemy.isElite   = data.isElite;
         enemy.isBoss    = data.isBoss;
         enemy.statScale = statScale;
+        enemy.speed     = data.speed > 0f ? data.speed : 1f; // 집단 무리원도 속도는 그대로
         return enemy;
     }
 }

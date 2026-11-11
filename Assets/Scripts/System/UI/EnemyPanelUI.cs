@@ -21,7 +21,10 @@ public class EnemyPanelUI : MonoBehaviour
         blockText.text   = enemy.block > 0 ? $"방어 {enemy.block}" : "";
 
         EnemyAction next = enemy.PeekNextAction();
-        intentText.text  = next != null ? $"→ {IntentIcon(next.intent)} {next.description}" : "";
+        // 시간 기반 전투 - 다음 행동까지 남은 시간과 속도도 같이 보여 준다
+        var bm = BattleManager.Instance;
+        string when = bm != null ? $"  ({bm.TimeUntilAct(enemy):0.0} 뒤{(enemy.speed != 1f ? $", 속도 {enemy.speed:0.##}" : "")})" : "";
+        intentText.text  = next != null ? $"→ {IntentIcon(next.intent)} {next.description}{when}" : "";
 
         var sb = new System.Text.StringBuilder();
         if (enemy.poisonStack > 0) sb.Append($"독 {enemy.poisonStack}  ");
