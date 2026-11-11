@@ -36,8 +36,9 @@ public class RewardUI : MonoBehaviour
         BattleReward reward = DungeonManager.Instance?.GetPendingReward();
         if (reward == null) return;
 
-        goldRewardText.text = $"골드 +{reward.gold}";
-        titleText.text      = "카드를 1장 선택하세요";
+        // 보물상자·함정 결과도 이 화면으로 보여 준다 - 골드가 없으면 골드 줄을 비우고, 제목이 있으면 그걸 쓴다
+        goldRewardText.text = reward.gold > 0 ? $"골드 +{reward.gold}" : "";
+        titleText.text      = reward.title ?? "카드를 1장 선택하세요";
 
         if (foodRewardText != null)
         {

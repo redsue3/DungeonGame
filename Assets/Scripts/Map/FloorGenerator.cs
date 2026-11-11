@@ -18,6 +18,11 @@ public static class FloorGenerator
     private const int PlacementAttempts = 400;
     private const int ExtraEdges  = 3; // MST 위에 추가로 이어서 루프를 만드는 간선 수
 
+    // 계단 도착 후 이만큼 걷는 동안 안전 구역이 유지된다 (DungeonManager.TryMove가 한 걸음마다 1씩 줄임)
+    public const int SafeTurns = 5;
+    // 돌아다니는 엘리트는 플레이어가 이만큼 걸을 때마다 한 칸 움직인다 (추적 중일 땐 매 걸음)
+    public const int WanderStepInterval = 2;
+
     public static DungeonFloor Generate(int layer)
     {
         var floor = new DungeonFloor(layer, Width, Height);
@@ -33,9 +38,21 @@ public static class FloorGenerator
 
         AssignRoomTypes(floor.Rooms, start, boss, layer);
         SpawnEnemies(floor, layer);
+        SpawnRoamingElite(floor, layer, start, boss);
 
+        // 계단 = 시작 방 중심. 방 크기가 무작위여도 최소 방 크기 기준의 정사각형을 안전 구역으로 잡는다.
         floor.PlayerX = start.CenterX;
         floor.PlayerY = start.CenterY;
+        floor.SafeZone = new RoomInfo
+        {
+            id = -1,
+            x  = floor.PlayerX - MinRoomSize / 2,
+            y  = floor.PlayerY - MinRoomSize / 2,
+            w  = MinRoomSize,
+            h  = MinRoomSize,
+        };
+        floor.SafeTurnsLeft = SafeTurns;
+        PlacePickups(floor, start, boss);
         floor.RevealAround(floor.PlayerX, floor.PlayerY, VisionRadius);
 
         return floor;
@@ -164,6 +181,8 @@ public static class FloorGenerator
     // ─────────────────────────────────────────
     // 방 타입 배정 - 성소는 게임 전체(런)에 1개만 나오도록 1층에서만 배정, 모닥불(Rest)은 층당 1개로 축소.
     // 풀 크기(9~10)가 남은 방 개수(11)보다 적어서 남는 방은 아래 foreach의 fallback으로 NormalEnemy가 됨.
+    // 엘리트 방은 만들지 않는다(2026-11-11) - 엘리트는 SpawnRoamingElite로 층을 돌아다니고, 그 자리는 빈 방으로 둔다
+    // (일반 전투 수가 늘지 않도록 Empty를 대신 넣음).
     // ─────────────────────────────────────────
     private static void AssignRoomTypes(List<RoomInfo> rooms, RoomInfo start, RoomInfo boss, int layer)
     {
@@ -171,7 +190,7 @@ public static class FloorGenerator
         {
             TileType.NormalEnemy, TileType.NormalEnemy, TileType.NormalEnemy, TileType.NormalEnemy,
             TileType.GroupEnemy, TileType.GroupEnemy,
-            TileType.EliteEnemy,
+            TileType.Empty,
             TileType.Rest,
             TileType.Shop,
         };
@@ -223,7 +242,7 @@ public static class FloorGenerator
                     for (int i = 0; i < GroupSize; i++)
                         SpawnOne(floor, room, PickNormal(layer), ref nextId, GroupMemberScale);
                     break;
-                case TileType.EliteEnemy:
+                case TileType.EliteEnemy: // 지금은 배정되지 않음 (돌아다니는 엘리트로 대체) - 예전 데이터 호환용으로만 남김
                     SpawnOne(floor, room, PickElite(layer), ref nextId);
                     break;
                 case TileType.Boss:
@@ -231,6 +250,82 @@ public static class FloorGenerator
                     break;
             }
         }
+    }
+
+    // 층마다 엘리트 1마리가 방 사이를 돌아다닌다. 시작 방에서 먼 쪽 절반의 방에서 출발해 바로 마주치지 않게 하고,
+    // roomId는 자기만의 음수 값으로 둬서 지나가던 방의 일반몹과 한 전투로 묶이지 않게 한다.
+    private static void SpawnRoamingElite(DungeonFloor floor, int layer, RoomInfo start, RoomInfo boss)
+    {
+        var candidates = floor.Rooms.Where(r => r != start && r != boss)
+                                    .OrderByDescending(r => ManhattanDist(r, start)).ToList();
+        if (candidates.Count == 0) return;
+        var far = candidates.Take(Mathf.Max(1, candidates.Count / 2)).ToList();
+        RoomInfo home = far[Random.Range(0, far.Count)];
+
+        int before = floor.Enemies.Count;
+        int nextId = floor.Enemies.Count == 0 ? 0 : floor.Enemies.Max(e => e.id) + 1;
+        SpawnOne(floor, home, PickElite(layer), ref nextId);
+        if (floor.Enemies.Count == before) return; // 빈 칸이 없으면 생략 (실제로는 일어나지 않음)
+
+        EnemySpawn elite = floor.Enemies[floor.Enemies.Count - 1];
+        elite.roomId = RoamingRoomId(elite.id);
+        elite.state  = EnemyAiState.Wandering;
+        elite.wanderTargetRoomId = PickWanderTarget(floor, home.id);
+    }
+
+    public static int RoamingRoomId(int spawnId) => -1000 - spawnId;
+
+    // 보물상자에서 튀어나올 적(미믹) 등 - 그 층 일반몹 하나
+    public static string RandomNormalId(int layer) => PickNormal(layer);
+
+    // ─────────────────────────────────────────
+    // 보물상자·바닥 보상 배치 (TreasureTable, 2026-11-11)
+    // 시작 방·보스 방·안전 구역·적이 선 칸·방 중심(휴식/상점/성소 아이콘 자리)은 피한다.
+    // 상자는 콘텐츠 방 안에 방마다 최대 1개, 바닥 보상은 복도를 포함한 아무 빈 바닥에 놓는다.
+    // ─────────────────────────────────────────
+    private static void PlacePickups(DungeonFloor floor, RoomInfo start, RoomInfo boss)
+    {
+        bool Free(int x, int y) =>
+            floor.IsWalkable(x, y) && floor.EnemyAt(x, y) == null && floor.PickupAt(x, y) == null
+            && !start.Contains(x, y) && !boss.Contains(x, y)
+            && (floor.SafeZone == null || !floor.SafeZone.Contains(x, y))
+            && !floor.Rooms.Any(r => r.CenterX == x && r.CenterY == y);
+
+        var rooms = floor.Rooms.Where(r => r != start && r != boss).ToList();
+        Shuffle(rooms);
+        int chests = 0;
+        foreach (RoomInfo room in rooms)
+        {
+            if (chests >= TreasureTable.ChestsPerFloor) break;
+            var cells = new List<(int x, int y)>();
+            for (int x = room.x; x < room.x + room.w; x++)
+                for (int y = room.y; y < room.y + room.h; y++)
+                    if (Free(x, y)) cells.Add((x, y));
+            if (cells.Count == 0) continue;
+
+            var c = cells[Random.Range(0, cells.Count)];
+            floor.Pickups.Add(new MapPickup { x = c.x, y = c.y, kind = PickupKind.Chest });
+            chests++;
+        }
+
+        var tiles = new List<(int x, int y)>();
+        for (int x = 0; x < floor.Width; x++)
+            for (int y = 0; y < floor.Height; y++)
+                if (Free(x, y)) tiles.Add((x, y));
+        for (int i = 0; i < TreasureTable.FloorLootPerFloor && tiles.Count > 0; i++)
+        {
+            int k = Random.Range(0, tiles.Count);
+            floor.Pickups.Add(new MapPickup { x = tiles[k].x, y = tiles[k].y, kind = PickupKind.FloorLoot });
+            tiles.RemoveAt(k);
+        }
+    }
+
+    // 다음으로 향할 방 - 시작 방·보스 방·지금 방을 뺀 콘텐츠 방 중 무작위 (EnemyAiSystem도 도착할 때마다 다시 고른다)
+    public static int PickWanderTarget(DungeonFloor floor, int currentRoomId)
+    {
+        RoomInfo start = floor.Rooms[0];
+        var options = floor.Rooms.Where(r => r != start && r.roomType != TileType.Boss && r.id != currentRoomId).ToList();
+        return options.Count == 0 ? currentRoomId : options[Random.Range(0, options.Count)].id;
     }
 
     public const int   GroupSize        = 3;

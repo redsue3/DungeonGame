@@ -5,14 +5,19 @@ using System.Collections.Generic;
 public static class EnemyAiSystem
 {
     // 모든 적을 한 스텝 진행. 플레이어에게 닿은 적(전투 개시자)이 있으면 그 적을 반환한다.
+    // 계단 안전 구역(floor.IsSafeZoneActive)이 살아 있는 동안 플레이어가 그 안에 있으면 감지·추적하지 않고,
+    // 어떤 적도 안전 구역 칸으로 들어가지 않는다.
     public static EnemySpawn StepAll(DungeonFloor floor)
     {
+        bool playerSafe = floor.IsInSafeZone(floor.PlayerX, floor.PlayerY);
+
         foreach (EnemySpawn e in floor.Enemies)
         {
             if (e.isDead) continue;
 
             // 시야선이 뚫려 있고 감지 반경 안이면 Chasing으로 전환 (벽 너머에선 감지하지 않음)
-            if (e.state == EnemyAiState.Idle &&
+            bool canDetect = e.state == EnemyAiState.Idle || e.state == EnemyAiState.Wandering;
+            if (canDetect && !playerSafe &&
                 floor.HasLineOfSight(e.x, e.y, floor.PlayerX, floor.PlayerY))
             {
                 int dist2 = (e.x - floor.PlayerX) * (e.x - floor.PlayerX) +
@@ -21,10 +26,53 @@ public static class EnemyAiSystem
                     e.state = EnemyAiState.Chasing;
             }
 
+            if (e.state == EnemyAiState.Wandering) { StepWander(floor, e); continue; }
             if (e.state != EnemyAiState.Chasing) continue;
+            if (playerSafe) continue; // 안전 구역 안의 플레이어는 쫓지 않고 제자리에서 기다린다
             if (StepTowardPlayer(floor, e)) return e;
         }
         return null;
+    }
+
+    // 돌아다니는 엘리트 - WanderStepInterval 걸음마다 목표 방 중심으로 한 칸. 도착하거나 길이 막히면 다음 방을 고른다.
+    private static void StepWander(DungeonFloor floor, EnemySpawn e)
+    {
+        if (++e.wanderStepCounter < FloorGenerator.WanderStepInterval) return;
+        e.wanderStepCounter = 0;
+
+        RoomInfo target = floor.Rooms.Find(r => r.id == e.wanderTargetRoomId);
+        if (target == null || System.Math.Abs(e.x - target.CenterX) + System.Math.Abs(e.y - target.CenterY) <= 1)
+        {
+            RoomInfo here = floor.RoomAt(e.x, e.y);
+            e.wanderTargetRoomId = FloorGenerator.PickWanderTarget(floor, here != null ? here.id : -1);
+            return;
+        }
+
+        // 길 찾기는 다른 적을 무시하고 한다 - 방 출구에 가만히 선 일반몹 때문에 갇히지 않도록 (검증에서 약 3% 층에서 갇혔음)
+        var path = BfsPath(floor, e.x, e.y, target.CenterX, target.CenterY, ignoreEnemies: true);
+        if (path == null || path.Count < 2)
+        {
+            e.wanderTargetRoomId = FloorGenerator.PickWanderTarget(floor, target.id);
+            return;
+        }
+        var next = path[1];
+        if (TryStep(floor, e, next.x - e.x, next.y - e.y)) return;
+
+        // 가는 칸에 가만히 있는(Idle) 일반몹이 서 있으면 자리를 바꿔 지나간다. 보스와 추적 중인 적은 건드리지 않는다.
+        EnemySpawn blocker = floor.EnemyAt(next.x, next.y);
+        RoomInfo blockerRoom = blocker != null ? floor.Rooms.Find(r => r.id == blocker.roomId) : null;
+        if (blocker != null && blocker.state == EnemyAiState.Idle && blockerRoom != null && blockerRoom.roomType != TileType.Boss
+            && !floor.IsInSafeZone(next.x, next.y))
+        {
+            (blocker.x, blocker.y) = (e.x, e.y);
+            (e.x, e.y) = (next.x, next.y);
+            return;
+        }
+
+        // 비켜 줄 수 없는 적(보스, 추적 중인 적)이 막고 있으면 적을 피하는 길로 돌아가고, 그런 길도 없으면 다른 방을 고른다
+        var detour = BfsPath(floor, e.x, e.y, target.CenterX, target.CenterY);
+        if (detour != null && detour.Count >= 2 && TryStep(floor, e, detour[1].x - e.x, detour[1].y - e.y)) return;
+        e.wanderTargetRoomId = FloorGenerator.PickWanderTarget(floor, target.id);
     }
 
     // BFS 최단 경로로 한 칸 이동. 다음 칸이 플레이어 타일이면 이동 대신 접촉(전투 개시) 신호를 반환.
@@ -40,7 +88,7 @@ public static class EnemyAiSystem
         return false;
     }
 
-    private static List<(int x, int y)> BfsPath(DungeonFloor floor, int sx, int sy, int tx, int ty)
+    private static List<(int x, int y)> BfsPath(DungeonFloor floor, int sx, int sy, int tx, int ty, bool ignoreEnemies = false)
     {
         var start = (x: sx, y: sy);
         var goal  = (x: tx, y: ty);
@@ -64,7 +112,9 @@ public static class EnemyAiSystem
                 if (!floor.IsWalkable(next.x, next.y)) continue;
                 if (parent.ContainsKey(next)) continue;
                 // 플레이어 칸 자체는 목표로 허용, 다른 적이 막고 있으면 우회
-                if (next != goal && floor.EnemyAt(next.x, next.y) != null) continue;
+                if (!ignoreEnemies && next != goal && floor.EnemyAt(next.x, next.y) != null) continue;
+                // 계단 안전 구역은 살아 있는 동안 벽처럼 돌아간다
+                if (floor.IsInSafeZone(next.x, next.y)) continue;
                 parent[next] = cur;
                 queue.Enqueue(next);
             }
@@ -85,6 +135,7 @@ public static class EnemyAiSystem
         int nx = e.x + dx, ny = e.y + dy;
         if (!floor.IsWalkable(nx, ny)) return false;
         if (floor.EnemyAt(nx, ny) != null) return false;
+        if (floor.IsInSafeZone(nx, ny)) return false; // 계단 안전 구역에는 들어가지 않는다
         if (nx == floor.PlayerX && ny == floor.PlayerY) return false; // 접촉 전투는 StepTowardPlayer가 처리
 
         e.x = nx;

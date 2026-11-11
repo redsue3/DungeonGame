@@ -74,14 +74,132 @@ public class DungeonManager : MonoBehaviour
 
         // 적 AI 스텝 - 쫓아오던 적이 플레이어에게 닿으면 그 적이 전투를 건다
         EnemySpawn attacker = EnemyAiSystem.StepAll(CurrentFloor);
+
+        // 계단 안전 구역은 적이 한 번 움직인 뒤에 한 걸음씩 줄어든다 (도착 후 SafeTurns 걸음 동안 보호)
+        if (CurrentFloor.SafeTurnsLeft > 0) CurrentFloor.SafeTurnsLeft--;
+
         if (attacker != null)
         {
             Engage(attacker);
             return true;
         }
 
+        if (mapMessageMovesLeft > 0 && --mapMessageMovesLeft == 0) MapMessage = null;
+        if (TryOpenPickup(nx, ny)) return true;
+
         TryEnterRoomEvent(nx, ny);
         return true;
+    }
+
+    // ─────────────────────────────────────────
+    // 보물상자·바닥 보상 (TreasureTable) - 밟으면 열린다
+    // ─────────────────────────────────────────
+    // 바닥 보상·함정 같은 짧은 결과를 맵 위쪽 줄에 몇 걸음 동안 보여 준다 (DungeonMapUI가 계층 표시 옆에 붙임)
+    public string MapMessage { get; private set; }
+    private int mapMessageMovesLeft;
+    private void ShowMapMessage(string msg) { MapMessage = msg; mapMessageMovesLeft = 4; }
+
+    private bool TryOpenPickup(int x, int y)
+    {
+        MapPickup pickup = CurrentFloor.PickupAt(x, y);
+        if (pickup == null) return false;
+        pickup.taken = true;
+
+        if (pickup.kind == PickupKind.FloorLoot)
+        {
+            if (Random.Range(0, 100) < TreasureTable.LootGoldChancePercent)
+            {
+                int gold = RelicDatabase.ApplyGoldBonus(TreasureTable.RollLootGold(currentLayer), Player);
+                Player.gold += gold;
+                ShowMapMessage($"바닥에서 주움: 골드 +{gold}");
+            }
+            else
+            {
+                string foodId = LootTable.RollFood(currentLayer);
+                Player.inventory.AddFood(foodId);
+                ShowMapMessage($"바닥에서 주움: {FoodDatabase.Get(foodId)?.displayName}");
+            }
+            return false; // 줍기만 하고 맵에 그대로 머문다
+        }
+
+        // 보물상자 - 결과는 보상 화면으로 보여 준다 (미믹은 바로 전투)
+        ChestOutcome outcome = TreasureTable.RollChest();
+        var reward = new BattleReward();
+        switch (outcome)
+        {
+            case ChestOutcome.Gold:
+                reward.gold  = RelicDatabase.ApplyGoldBonus(TreasureTable.RollChestGold(currentLayer), Player);
+                Player.gold += reward.gold;
+                reward.title = "보물상자를 열었다 - 골드";
+                break;
+
+            case ChestOutcome.Card:
+                reward.cardChoices = LootTable.RollCardRewards(currentLayer, 3);
+                reward.title = "보물상자를 열었다 - 카드를 1장 고르세요";
+                break;
+
+            case ChestOutcome.Food:
+                reward.foodId = LootTable.RollFood(currentLayer);
+                Player.inventory.AddFood(reward.foodId);
+                reward.title = "보물상자를 열었다 - 식료품";
+                break;
+
+            case ChestOutcome.Relic:
+                reward.relicId = LootTable.RollRelic(false, Player);
+                if (reward.relicId != null)
+                {
+                    Player.relics.Add(reward.relicId);
+                    RelicDatabase.ApplyAcquisitionEffects(reward.relicId, Player);
+                    reward.title = "보물상자를 열었다 - 유물";
+                }
+                else // 가질 수 있는 유물을 다 모았으면 골드로 대신
+                {
+                    reward.gold  = RelicDatabase.ApplyGoldBonus(TreasureTable.RollChestGold(currentLayer) * 2, Player);
+                    Player.gold += reward.gold;
+                    reward.title = "보물상자를 열었다 - 골드";
+                }
+                break;
+
+            case ChestOutcome.Mimic:
+                SpawnMimicAndFight(x, y);
+                return true;
+
+            case ChestOutcome.Trap:
+                if (Random.value < 0.5f)
+                {
+                    int dmg = Mathf.Min(TreasureTable.TrapHpPerLayer * currentLayer, Player.currentHp - 1); // 함정으로는 죽지 않는다
+                    Player.currentHp -= Mathf.Max(0, dmg);
+                    reward.title = $"함정! 상자에서 가시가 튀어나왔다 - HP -{Mathf.Max(0, dmg)}";
+                }
+                else
+                {
+                    Player.ChangeHunger(-TreasureTable.TrapHungerLoss);
+                    reward.title = $"함정! 곳간이 대가를 가져갔다 - 배고픔 -{TreasureTable.TrapHungerLoss}";
+                }
+                break;
+        }
+
+        pendingReward = reward;
+        TransitionTo(GameState.Reward);
+        return true;
+    }
+
+    // 미믹 - 상자 자리에 그 층 일반몹 하나가 튀어나와 바로 전투. 혼자 싸우도록 자기만의 roomId를 준다.
+    private void SpawnMimicAndFight(int x, int y)
+    {
+        int id = CurrentFloor.Enemies.Count == 0 ? 0 : CurrentFloor.Enemies.Max(e => e.id) + 1;
+        var mimic = new EnemySpawn
+        {
+            id              = id,
+            roomId          = FloorGenerator.RoamingRoomId(id),
+            enemyTemplateId = FloorGenerator.RandomNormalId(currentLayer),
+            x               = x,
+            y               = y,
+            state           = EnemyAiState.Chasing,
+            isMimic         = true,
+        };
+        CurrentFloor.Enemies.Add(mimic);
+        Engage(mimic);
     }
 
     private bool TryEngageEnemyAt(int x, int y)
@@ -104,6 +222,7 @@ public class DungeonManager : MonoBehaviour
         {
             Enemy e = EnemyFactory.Create(s.enemyTemplateId, s.statScale); // 집단 조우 무리원은 1/3 능력치
             if (e == null) continue;
+            if (s.isMimic) e.characterName = "상자 속 " + e.characterName; // 보물상자에서 튀어나온 적
             MonsterLoreDatabase.MarkDiscovered(s.enemyTemplateId); // 도감: 한 번이라도 맞붙은 적은 설정이 열린다
             // 4단계 - 전투는 이 EnemySpawn이 서 있던 그리드 좌표에서 그대로 이어진다.
             // spawnId를 들고 있어야 도주 시 최종 위치를 다시 EnemySpawn에 되돌려줄 수 있다.
@@ -242,6 +361,12 @@ public class DungeonManager : MonoBehaviour
             foreach (EnemySpawn s in CurrentFloor.AliveEnemiesInRoom(currentRoom.id).ToList())
                 s.isDead = true;
         }
+        // 돌아다니는 엘리트처럼 방에 속하지 않은 적(currentRoom == null)도 맵에서 지운다
+        foreach (Enemy e in defeatedEnemies)
+        {
+            EnemySpawn s = CurrentFloor.Enemies.FirstOrDefault(x => x.id == e.spawnId);
+            if (s != null) s.isDead = true;
+        }
 
         // 골드는 처치한 적별 보상(EnemyData의 rewardGold 범위) 합산 - 조우 난이도에 자연히 비례한다
         int gold = RelicDatabase.ApplyGoldBonus(defeatedEnemies.Sum(e => e.RollGoldReward()), Player);
@@ -255,8 +380,9 @@ public class DungeonManager : MonoBehaviour
             Debug.Log($"[DungeonManager] 식료품 획득: {FoodDatabase.Get(foodId)?.displayName}");
         }
 
-        bool isBoss  = currentRoom?.roomType == TileType.Boss;
-        bool isElite = currentRoom?.roomType == TileType.EliteEnemy;
+        // 엘리트는 이제 방이 아니라 돌아다니는 적이라, 방 타입뿐 아니라 쓰러뜨린 적의 등급으로도 판정한다
+        bool isBoss  = currentRoom?.roomType == TileType.Boss       || defeatedEnemies.Any(e => e.isBoss);
+        bool isElite = currentRoom?.roomType == TileType.EliteEnemy || defeatedEnemies.Any(e => e.isElite);
 
         string relicId = null;
         if (isBoss || isElite)
@@ -267,6 +393,19 @@ public class DungeonManager : MonoBehaviour
                 Player.relics.Add(relicId);
                 RelicDatabase.ApplyAcquisitionEffects(relicId, Player);
                 Debug.Log($"[DungeonManager] 유물 획득: {RelicDatabase.Get(relicId)?.displayName}");
+            }
+        }
+
+        // 미믹(보물상자에서 튀어나온 적)을 이기면 확률로 유물을 더 준다
+        bool beatMimic = defeatedEnemies.Any(e => CurrentFloor.Enemies.Any(s => s.id == e.spawnId && s.isMimic));
+        if (relicId == null && beatMimic && Random.value < TreasureTable.MimicRelicChance)
+        {
+            relicId = LootTable.RollRelic(false, Player);
+            if (relicId != null)
+            {
+                Player.relics.Add(relicId);
+                RelicDatabase.ApplyAcquisitionEffects(relicId, Player);
+                Debug.Log($"[DungeonManager] 미믹 유물 획득: {RelicDatabase.Get(relicId)?.displayName}");
             }
         }
 

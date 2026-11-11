@@ -81,6 +81,9 @@ public class DungeonMapUI : MonoBehaviour
     private static readonly Color PlayerColor        = new Color(0.2f, 0.6f, 1f);
     private static readonly Color EnemyIdleColor     = new Color(0.6f, 0.55f, 0.2f);
     private static readonly Color EnemyChaseColor    = new Color(1f, 0.25f, 0.2f);
+    private static readonly Color EliteMarkerColor   = new Color(0.7f, 0.2f, 0.8f);  // 돌아다니는 엘리트 (예전 엘리트 방 색)
+    private static readonly Color SafeZoneTint       = new Color(0.35f, 0.75f, 0.45f); // 계단 안전 구역 바닥
+    private static readonly Color PickupColor        = new Color(0.85f, 0.68f, 0.2f);  // 보물상자·바닥 보상 (황금 곳간)
 
     private DungeonFloor lastFloor;
     private readonly Dictionary<(int, int), GameObject> floorTileObjects = new Dictionary<(int, int), GameObject>();
@@ -139,7 +142,9 @@ public class DungeonMapUI : MonoBehaviour
         DungeonFloor floor = DungeonManager.Instance?.CurrentFloor;
         if (floor == null) return;
 
-        layerText.text = $"{floor.Layer}계층";
+        // 바닥 보상 같은 짧은 알림은 계층 표시 옆에 몇 걸음 동안 붙인다 (DungeonManager.MapMessage)
+        string msg = DungeonManager.Instance?.MapMessage;
+        layerText.text = $"{floor.Layer}계층" + (string.IsNullOrEmpty(msg) ? "" : $"   {msg}");
         UpdatePlayerStatus();
 
         if (floor != lastFloor)
@@ -164,6 +169,11 @@ public class DungeonMapUI : MonoBehaviour
             playerHungerText.text = $"배고픔  {p.hunger} / {p.maxHunger}" + (p.IsStarving ? " (위험!)" : "");
         if (playerCostText != null)
             playerCostText.text = $"코스트  {p.currentCost} / {p.maxCost}";
+
+        // 계단 안전 구역이 남아 있으면 몇 걸음 남았는지 배고픔 줄 뒤에 붙인다
+        var safeFloor = DungeonManager.Instance?.CurrentFloor;
+        if (playerHungerText != null && safeFloor != null && safeFloor.IsSafeZoneActive)
+            playerHungerText.text += $"   안전 {safeFloor.SafeTurnsLeft}걸음";
 
         var relicNames = new System.Text.StringBuilder();
         foreach (string id in p.relics.GetAll())
@@ -246,7 +256,16 @@ public class DungeonMapUI : MonoBehaviour
             else
             {
                 img.color = visible ? floorVisible : floorDim;
+                if (floor.IsInSafeZone(x, y)) img.color = Color.Lerp(img.color, SafeZoneTint, 0.45f); // 계단 안전 구역
                 lbl.text  = "";
+
+                // 보물상자·바닥 보상 - 한 번 밝혀진 칸이면 계속 보인다 (안 연 것만)
+                MapPickup pickup = floor.PickupAt(x, y);
+                if (pickup != null)
+                {
+                    img.color = Color.Lerp(img.color, PickupColor, visible ? 0.6f : 0.3f);
+                    lbl.text  = pickup.kind == PickupKind.Chest ? "상자" : "◆";
+                }
             }
 
             // 4방향(상하좌우)만 인접으로 인정한다. 대각선까지 허용하면 벽 모서리를 가로질러
@@ -285,8 +304,12 @@ public class DungeonMapUI : MonoBehaviour
             var ert = (RectTransform)obj.transform;
             ert.sizeDelta = new Vector2(TileSize * 0.8f, TileSize * 0.8f);
             ert.anchoredPosition = new Vector2((e.x - px) * TileSize, (e.y - py) * TileSize);
-            obj.GetComponent<Image>().color = e.state == EnemyAiState.Chasing ? EnemyChaseColor : EnemyIdleColor;
-            obj.GetComponentInChildren<TextMeshProUGUI>().text = e.state == EnemyAiState.Chasing ? "!" : "?";
+            // 엘리트는 돌아다니므로 방 아이콘 대신 마커 색과 글자로 구분한다
+            bool elite = EnemyDatabase.Get(e.enemyTemplateId)?.isElite ?? false;
+            Color baseColor = e.state == EnemyAiState.Chasing ? EnemyChaseColor : EnemyIdleColor;
+            obj.GetComponent<Image>().color = elite ? Color.Lerp(EliteMarkerColor, baseColor, 0.3f) : baseColor;
+            obj.GetComponentInChildren<TextMeshProUGUI>().text =
+                elite ? (e.state == EnemyAiState.Chasing ? "정예!" : "정예") : (e.state == EnemyAiState.Chasing ? "!" : "?");
         }
 
         var toRemove = new List<int>();

@@ -12,6 +12,7 @@ using UnityEngine;
 //   3. PR3: 계층별 바닥색이 서로 다른가
 //   4. 도감: bestiary.md 22종이 EnemyDatabase 키와 정확히 일치하는가
 //   5. 전투 그리드: 대각선으로 떨어진 적이 한 턴에 대각선으로 붙는가 (8방향 추적), 코너컷은 안 하는가
+//   6. 돌아다니는 엘리트(층마다 1마리, 엘리트 방 없음)와 계단 안전 구역(적이 들어오거나 접촉하지 않음) (2026-11-11)
 // 화면에서 손으로 봐야 하는 것(UI 배치, 손맛)은 여기서 못 본다 - devlog의 수동 체크리스트로.
 public static class LogicVerify
 {
@@ -26,7 +27,45 @@ public static class LogicVerify
         CheckBossPhases();
         CheckFloorPalette();
         CheckDiagonalChase();
+        CheckRoamingEliteAndSafeZone();
         Debug.Log($"[LogicVerify] 결과: 통과 {pass} · 실패 {fail}");
+    }
+
+    // ── 6. 돌아다니는 엘리트 + 계단 안전 구역 ─────────────────────────
+    private static void CheckRoamingEliteAndSafeZone()
+    {
+        var db = EnemyTable();
+        bool eliteOk = true, noEliteRoom = true, zoneOk = true, emptyZone = true, guarded = true;
+        for (int layer = 1; layer <= 3; layer++)
+        {
+            for (int seed = 0; seed < 30; seed++)
+            {
+                Random.InitState(5000 + 100 * layer + seed);
+                DungeonFloor floor = FloorGenerator.Generate(layer);
+
+                var elites = floor.Enemies.Where(s => db[s.enemyTemplateId].isElite).ToList();
+                if (elites.Count != 1 || elites[0].state != EnemyAiState.Wandering || elites[0].roomId >= 0) eliteOk = false;
+                if (floor.Rooms.Any(r => r.roomType == TileType.EliteEnemy)) noEliteRoom = false;
+
+                RoomInfo z = floor.SafeZone; // 최소 방 크기(3) 정사각형, 계단(플레이어 시작점)이 가운데
+                if (z == null || z.w != 3 || z.h != 3 || z.CenterX != floor.PlayerX || z.CenterY != floor.PlayerY
+                    || floor.SafeTurnsLeft != FloorGenerator.SafeTurns) zoneOk = false;
+                if (floor.Enemies.Any(s => floor.IsInSafeZone(s.x, s.y))) emptyZone = false;
+
+                // 플레이어가 계단에 서 있는 동안 적 AI를 안전 걸음 수만큼 돌려도 아무도 들어오거나 전투를 걸지 않는다
+                for (int step = 0; step < FloorGenerator.SafeTurns; step++)
+                {
+                    if (EnemyAiSystem.StepAll(floor) != null) guarded = false;
+                    if (floor.Enemies.Any(s => !s.isDead && floor.IsInSafeZone(s.x, s.y))) guarded = false;
+                    floor.SafeTurnsLeft--;
+                }
+            }
+        }
+        Check(eliteOk,     "층마다 돌아다니는 엘리트가 정확히 1마리 (Wandering, 전용 음수 roomId)");
+        Check(noEliteRoom, "엘리트 방이 배정되지 않는다");
+        Check(zoneOk,      $"계단 안전 구역 = 계단 중심 3x3, 남은 걸음 = {FloorGenerator.SafeTurns}");
+        Check(emptyZone,   "층 생성 직후 안전 구역 안에 적이 없다");
+        Check(guarded,     "안전 구역이 살아 있는 동안 적이 들어오거나 전투를 걸지 않는다");
     }
 
     public static void RunBatch()

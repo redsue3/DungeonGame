@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using System.Linq;
 
 public enum TileKind { Wall, Floor }
-public enum EnemyAiState { Idle, Chasing }
+// Wandering: 방을 옮겨 다니는 적(엘리트). 플레이어를 감지하면 Chasing으로 바뀐다.
+public enum EnemyAiState { Idle, Chasing, Wandering }
 
 // 방 하나 - 사각형 영역 + 조우 타입(TileType 재사용: Empty=시작방/평범한 통로, NormalEnemy/GroupEnemy/EliteEnemy/Boss/Rest/Shop/Shrine).
 public class RoomInfo
@@ -30,6 +31,22 @@ public class EnemySpawn
     // 능력치 배율 - 전투에 들어갈 때 EnemyFactory가 HP·행동 수치·골드에 곱한다.
     // 집단 조우 무리원은 FloorGenerator.GroupMemberScale(1/3)이라 셋을 합쳐 일반몹 1마리 몫이 된다.
     public float         statScale = 1f;
+
+    // 돌아다니는 엘리트용 - 지금 향하는 방(id)과, 몇 번 걸음마다 한 칸 움직일지 세는 값.
+    // 돌아다니는 적은 roomId가 음수(자기만의 값)라서 다른 방의 적과 한 전투로 묶이지 않는다.
+    public int           wanderTargetRoomId = -1;
+    public int           wanderStepCounter;
+
+    // 보물상자에서 튀어나온 적(미믹) - 이기면 TreasureTable.MimicRelicChance로 유물을 더 준다
+    public bool          isMimic;
+}
+
+// 맵에 놓인 보물상자·바닥 보상 (TreasureTable). 밟으면 열리고 taken이 된다. 결과는 열 때 굴린다.
+public class MapPickup
+{
+    public int        x, y;
+    public PickupKind kind;
+    public bool       taken;
 }
 
 // 실제로 걸어다니는 픽셀던전 스타일 2D 타일 던전 한 층.
@@ -46,8 +63,18 @@ public class DungeonFloor
 
     public List<RoomInfo>   Rooms   = new List<RoomInfo>();
     public List<EnemySpawn> Enemies = new List<EnemySpawn>();
+    public List<MapPickup>  Pickups = new List<MapPickup>();
+
+    public MapPickup PickupAt(int x, int y) => Pickups.FirstOrDefault(p => !p.taken && p.x == x && p.y == y);
 
     public int PlayerX, PlayerY;
+
+    // 계단 도착 안전 구역 - 층에 내려왔을 때 계단(시작 방 중심)을 가운데로 최소 방 크기만큼의 사각형.
+    // SafeTurnsLeft 걸음 동안 적이 이 안으로 들어오지 못하고, 플레이어가 이 안에 있으면 감지·추적도 하지 않는다.
+    public RoomInfo SafeZone;
+    public int      SafeTurnsLeft;
+    public bool IsSafeZoneActive => SafeZone != null && SafeTurnsLeft > 0;
+    public bool IsInSafeZone(int x, int y) => IsSafeZoneActive && SafeZone.Contains(x, y);
 
     public DungeonFloor(int layer, int width, int height)
     {
