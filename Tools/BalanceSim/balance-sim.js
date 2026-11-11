@@ -33,7 +33,8 @@ const RUNS = parseInt(argVal('--runs', '600'), 10);
 const SEED = parseInt(argVal('--seed', '20261110'), 10);
 
 // ---------- 목표 (사용자 지정) ----------
-const TARGET = { normalMin: 0.40, normalMax: 0.70, elite: 0.90, boss: 1.10, growMin: 0.20, growMax: 0.40 };
+// growLag: 층마다 적 성장률 = 플레이어 성장률 - growLag (2026-11-11 사용자 요청: 똑같이 키우면 적이 너무 강하다)
+const TARGET = { normalMin: 0.40, normalMax: 0.70, elite: 0.90, boss: 1.10, growLag: 0.05 };
 const FIGHT_TURNS = 4;        // 방어막을 체력으로 환산할 때 쓰는 기준 전투 길이
 const BOSS_TURNS = 6;         // 보스 패턴 평균을 낼 때 보는 턴 수
 const BATTLES_PER_CHECK = 20; // 체크포인트마다 런당 측정 전투 수
@@ -68,10 +69,13 @@ function parsePlayers() {
   const out = {}; let m;
   while ((m = re.exec(src))) {
     const b = m[2];
-    const num = k => +(new RegExp(k + '\\s*=\\s*(\\d+)').exec(b)[1]);
+    const num = (k, d) => { const mm = new RegExp(k + '\\s*=\\s*(-?\\d+)').exec(b); if (mm) return +mm[1]; if (d === undefined) throw new Error(k + ' 없음'); return d; };
+    const fnum = k => { const mm = new RegExp(k + '\\s*=\\s*(-?\\d+(?:\\.\\d+)?)f?').exec(b); return mm ? +mm[1] : 0; };
     out[m[1]] = {
       cls: m[1], name: /displayName\s*=\s*"([^"]+)"/.exec(b)[1],
       maxHp: num('maxHp'), maxCost: num('maxCost'), hand: num('startHandSize'), atk: num('baseAttackBonus'),
+      blk: num('baseBlockBonus', 0), manaPerKill: num('manaPerKill', 0),
+      hpPerLevel: num('hpPerLevel', 0), atkPerLevel: fnum('attackPerLevel'), blkPerLevel: fnum('blockPerLevel'),
       deck: [.../starterDeckCardIds\s*=\s*new\[\]\s*\{([\s\S]*?)\}/.exec(b)[1].matchAll(/"(\w+)"/g)].map(x => x[1]),
     };
   }
@@ -135,9 +139,39 @@ function parseFloorEnemies() {
   };
   const bossSeg = /private static string GetBossId[\s\S]*?;/.exec(src)[0];
   const bosses = [...bossSeg.matchAll(/"(\w+)"/g)].map(x => x[1]);
-  return { normal: lists('PickNormal'), elite: lists('PickElite'), boss: bosses };
+  // 집단 조우 규칙: 무리 수와 무리원 능력치 배율 (상수가 없으면 예전 규칙 = 2마리, 원래 능력치)
+  const size = /const int\s+GroupSize\s*=\s*(\d+)/.exec(src);
+  const group = size ? { count: +size[1], scale: 1 / +size[1] } : { count: 2, scale: 1 };
+  // 층별 일반 방 두 마리 확률 (배열이 없으면 예전 규칙 = 항상 한 마리)
+  const pairSeg = /NormalPairChances\s*=\s*\{([^}]*)\}/.exec(src);
+  const pair = pairSeg ? pairSeg[1].split(',').map(s => parseFloat(s)) : [0, 0, 0];
+  return { normal: lists('PickNormal'), elite: lists('PickElite'), boss: bosses, group, pair };
 }
+const OLD_GROUP = { count: 2, scale: 1 }; // origin/master 1cd93eb까지의 규칙
 
+// 마법사 마나: ManaPerBonusDamage마다 공격 카드 피해 +1 (PlayerCharacter.cs 상수)
+// 레벨: 막타 경험치, 다음 레벨 필요량 = A + B x (레벨-1) (LevelSystem.cs)
+const LV = (() => { let src = ''; try { src = read('System/LevelSystem.cs'); } catch (e) { return null; }
+  const c = k => +new RegExp('const int\\s+' + k + '\\s*=\\s*(\\d+)').exec(src)[1];
+  const f = /XpToNext\(int level\)\s*=>\s*(\d+)\s*\+\s*(\d+)\s*\*\s*\(level - 1\)/.exec(src);
+  return { max: c('MaxLevel'), normal: c('XpNormal'), elite: c('XpElite'), boss: c('XpBoss'), a: +f[1], b: +f[2] }; })();
+const xpToNext = lv => LV.a + LV.b * (lv - 1);
+function levelUp(run) {
+  run.level++; run.maxHp += run.hpPerLevel;
+  run.atk = run.baseAtk + Math.floor(run.atkPerLevel * (run.level - 1) + 0.001);
+  run.blk = run.baseBlk + Math.floor(run.blkPerLevel * (run.level - 1) + 0.001);
+}
+// 적 하나를 막타로 쓰러뜨렸을 때 경험치 -> 오른 레벨 수 (PlayerCharacter.GainXp와 같은 규칙)
+function gainXpFor(run, e) {
+  if (!LV) return 0;
+  const base = e.isBoss ? LV.boss : e.isElite ? LV.elite : LV.normal;
+  run.xp += Math.max(1, roundToInt(base * (e.scale || 1)));
+  let ups = 0;
+  while (run.level < LV.max && run.xp >= xpToNext(run.level)) { run.xp -= xpToNext(run.level); levelUp(run); ups++; }
+  if (run.level >= LV.max) run.xp = 0;
+  return ups;
+}
+const MANA_PER_DMG = +(/ManaPerBonusDamage\s*=\s*(\d+)/.exec(read('PlayerCharacter.cs')) || [0, 1])[1];
 const CARDS = parseCards();
 const PLAYERS = parsePlayers();
 const { enemies: ENEMIES, src: ENEMY_SRC } = parseEnemies();
@@ -161,7 +195,7 @@ const clone = c => ({ ...c });
 // ---------- 전투 ----------
 // 적 상태 객체
 function makeEnemy(e) {
-  return { id: e.id, name: e.name, maxHp: e.hp, hp: e.hp, block: 0, atkPow: 0, poison: 0, burn: 0, phases: e.phases, phase: 0, idx: 0 };
+  return { id: e.id, name: e.name, isElite: e.isElite, isBoss: e.isBoss, scale: e.scale || 1, maxHp: e.hp, hp: e.hp, block: 0, atkPow: 0, poison: 0, burn: 0, phases: e.phases, phase: 0, idx: 0 };
 }
 function enemyPeek(en) { const p = en.phases[en.phase].acts; return p[en.idx % p.length]; }
 function enemyCheckPhase(en) {
@@ -197,7 +231,7 @@ function playTurn(P, foes, incoming) {
       const tgts = c.aoe ? alive().length : 1;
       if (c.dmg > 0) v += (c.dmg + atk + P.pendAtk) * tgts;
       v += c.poison * 2.5 * tgts + c.burn * 3 * tgts;
-      v += Math.min(c.blk + (c.blk > 0 ? P.pendDef : 0), needBlock) + Math.min(c.heal, P.maxHp - P.hp);
+      v += Math.min(c.blk > 0 ? Math.max(0, c.blk + P.pendDef + P.blk) : 0, needBlock) + Math.min(c.heal, P.maxHp - P.hp);
       v += c.draw * 3 + c.str * 4 + c.buffAtk * 0.8 + c.buffDef * 0.4 - c.selfDmg * 0.7;
       if (c.selfDmg >= P.hp) v = -1;
       const score = c.cost === 0 ? v * 100 : v / c.cost;
@@ -210,11 +244,11 @@ function playTurn(P, foes, incoming) {
     const targets = c.aoe ? alive() : [alive().sort((a, b) => a.hp - b.hp)[0]];
     if (c.dmg > 0) {
       const bonus = P.atk + P.str + P.pendAtk; P.pendAtk = 0;
-      for (const t of targets) { const before = t.hp; dmgTo(t, Math.max(0, c.dmg + bonus)); dealt += before - t.hp; enemyCheckPhase(t); if (t.hp <= 0) P.onKill(); }
+      for (const t of targets) { const before = t.hp; dmgTo(t, Math.max(0, c.dmg + bonus)); dealt += before - t.hp; enemyCheckPhase(t); if (t.hp <= 0) P.onKill(true, t); }
       if (c.grow > 0) c.dmg += c.grow;
     }
     for (const t of targets) { t.poison += c.poison; t.burn += c.burn; }
-    if (c.blk > 0) { P.block += c.blk + P.pendDef; defended += Math.min(c.blk + P.pendDef, needBlock); P.pendDef = 0; }
+    if (c.blk > 0) { const b = Math.max(0, c.blk + P.pendDef + P.blk); P.block += b; defended += Math.min(b, needBlock); P.pendDef = 0; }
     if (c.heal > 0) { const before = P.hp; P.hp = Math.min(P.maxHp, P.hp + c.heal); defended += P.hp - before; }
     if (c.str > 0) P.str += c.str;
     if (c.selfDmg > 0) dmgTo(P, c.selfDmg);
@@ -242,9 +276,16 @@ function hasRelicEffect(run, trigger, type) {
 }
 function newBattleState(run, hp) {
   const P = {
-    maxHp: run.maxHp, hp: hp ?? run.maxHp, block: 0, str: 0, atk: run.atk, cost: run.maxCost, penalty: 0,
+    maxHp: run.maxHp, hp: hp ?? run.maxHp, block: 0, str: 0, atk: run.atk + Math.floor((run.mana || 0) / MANA_PER_DMG), blk: run.blk || 0, cost: run.maxCost, penalty: 0,
     pendAtk: 0, pendDef: 0, hand: [], discard: [], drawPile: run.deck.slice(), poison: 0, burn: 0, phoenix: false,
-    onKill: () => { const h = hasRelicEffect(run, 'OnKill', 'HealHp'); if (h) P.hp = Math.min(P.maxHp, P.hp + h); },
+    mana: run.mana || 0,
+    // byCard: 카드로 직접 쓰러뜨림(막타). 마법사 마나는 이때만 +manaPerKill, 전투 중에도 바로 피해에 반영
+    onKill: (byCard, foe) => {
+      const h = hasRelicEffect(run, 'OnKill', 'HealHp'); if (h) P.hp = Math.min(P.maxHp, P.hp + h);
+      if (byCard && run.manaPerKill) P.mana += run.manaPerKill;
+      if (byCard && foe) { const before = run.maxHp; if (gainXpFor(run, foe) > 0) { P.maxHp = run.maxHp; P.hp += run.maxHp - before; P.blk = run.blk; } }
+      P.atk = run.atk + Math.floor(P.mana / MANA_PER_DMG);
+    },
   };
   P.str += hasRelicEffect(run, 'OnBattleStart', 'GainStrength');
   P.block += hasRelicEffect(run, 'OnBattleStart', 'GainBlock');
@@ -294,7 +335,7 @@ function fight(run, enemyIds, enemyTable) {
     for (const en of foes) {
       if (en.hp <= 0) continue;
       statusTick(en); enemyCheckPhase(en); en.block = 0;
-      if (en.hp <= 0) { P.onKill(); continue; }
+      if (en.hp <= 0) { P.onKill(false); continue; }
       const a = enemyPeek(en); en.idx++;
       if (a.intent === 'Attack') dmgTo(P, a.value + en.atkPow);
       else if (a.intent === 'Defend') en.block += a.value;
@@ -326,6 +367,13 @@ function enemyPower(e) {
   }
   const dpt = dmg / turns;
   return { hp: e.hp, hpEff: e.hp + blk, dpt, power: Math.sqrt((e.hp + blk) * dpt) };
+}
+// EnemyFactory.Create(id, statScale)와 같은 규칙 (반올림 후 최소 1)
+function factoryScale(e, s) {
+  if (s === 1) return e;
+  const sc = v => v <= 0 ? 0 : Math.max(1, roundToInt(v * s));
+  return { ...e, scale: s, id: e.id + '@' + s.toFixed(3), hp: sc(e.hp), goldMin: sc(e.goldMin), goldMax: sc(e.goldMax),
+    phases: e.phases.map(p => ({ th: p.th, acts: p.acts.map(a => ({ intent: a.intent, value: sc(a.value) })) })) };
 }
 function scaleEnemy(e, s) {
   return { ...e, hp: Math.max(1, Math.round(e.hp * s)), phases: e.phases.map(p => ({ th: p.th, acts: p.acts.map(a => ({ intent: a.intent, value: Math.max(1, Math.round(a.value * s)) })) })) };
@@ -366,8 +414,10 @@ function gainRelic(run, isBoss) {
     if (e.trigger === 'OnAcquire' && e.type === 'TransformRandomCard') run.deck[rInt(0, run.deck.length)] = clone(CARDS[rollCards(run.layer, 1)[0]]);
   }
 }
-function battleRewards(run, ids, kind) {
-  run.gold += Math.round(ids.reduce((s, id) => s + (ENEMIES[id].goldMin + ENEMIES[id].goldMax) / 2, 0) * (1 + run.goldPct / 100));
+function battleRewards(run, ids, kind, scale = 1) {
+  run.gold += Math.round(ids.reduce((s, id) => { const e = factoryScale(ENEMIES[id], scale); return s + (e.goldMin + e.goldMax) / 2; }, 0) * (1 + run.goldPct / 100));
+  run.mana += run.manaPerKill * ids.length; // 마법사: 막타마다 마나 (런 진행에선 쓰러뜨린 적 수만큼 막타를 친다고 봄)
+  for (const id of ids) gainXpFor(run, { ...ENEMIES[id], scale });
   for (const c of run.deck) if (c.grow > 0) c.dmg += Math.round(c.grow * 1.5); // 성장형 카드: 전투당 평균 1.5회 사용
   if (kind === 'boss') { gainRelic(run, true); if (run.layer < 3) offerCards(run, run.layer, 3); }
   else if (kind === 'elite') { if (rng() < LOOT.eliteRelic) gainRelic(run, false); offerCards(run, run.layer, 2); }
@@ -396,7 +446,9 @@ function shop(run) {
 }
 function newRun(cls) {
   const p = PLAYERS[cls];
-  return { cls, maxHp: p.maxHp, maxCost: p.maxCost, hand: p.hand, atk: p.atk, deck: p.deck.map(id => clone(CARDS[id])), relics: [], gold: 0, goldPct: 0, layer: 1 };
+  return { cls, maxHp: p.maxHp, maxCost: p.maxCost, hand: p.hand, atk: p.atk, blk: p.blk, manaPerKill: p.manaPerKill, mana: 0,
+    level: 1, xp: 0, baseAtk: p.atk, baseBlk: p.blk, hpPerLevel: p.hpPerLevel, atkPerLevel: p.atkPerLevel, blkPerLevel: p.blkPerLevel,
+    deck: p.deck.map(id => clone(CARDS[id])), relics: [], gold: 0, goldPct: 0, layer: 1 };
 }
 const snapshot = run => ({ ...run, deck: run.deck.map(clone), relics: run.relics.slice() });
 
@@ -413,8 +465,8 @@ function simulateRun(cls) {
     rooms.push('group', 'group', 'elite', 'shop'); if (L === 1) rooms.push('shrine');
     for (let i = rooms.length - 1; i > 0; i--) { const j = rInt(0, i + 1); [rooms[i], rooms[j]] = [rooms[j], rooms[i]]; }
     for (const r of rooms) {
-      if (r === 'normal') battleRewards(run, [pick(FLOOR.normal[L - 1])], 'normal');
-      else if (r === 'group') battleRewards(run, [pick(FLOOR.normal[L - 1]), pick(FLOOR.normal[L - 1])], 'normal');
+      if (r === 'normal') battleRewards(run, rng() < FLOOR.pair[L - 1] ? [pick(FLOOR.normal[L - 1]), pick(FLOOR.normal[L - 1])] : [pick(FLOOR.normal[L - 1])], 'normal');
+      else if (r === 'group') battleRewards(run, Array.from({ length: FLOOR.group.count }, () => pick(FLOOR.normal[L - 1])), 'normal', FLOOR.group.scale);
       else if (r === 'elite') battleRewards(run, [pick(FLOOR.elite[L - 1])], 'elite');
       else if (r === 'shop') shop(run);
       else if (r === 'shrine') shrine(run);
@@ -458,14 +510,15 @@ const classAvg = CHECKS.map((_, ci) => {
   return { bad: m('bad'), good: m('good'), avg: m('avg'), hp: m('hp'), O: m('O'), B: m('B') };
 });
 
-// 층별 기준: 그 층 시작 시점의 평균 전투력. 1층은 그대로, 2·3층 적은 이전 층 적 x (1+g), g는 20~40% 안에서 플레이어 성장률에 맞춤
+// 층별 기준: 1층은 1층 시작 평균 전투력 그대로. 2·3층 적은 이전 층 기준 x (1 + 플레이어 성장률 - growLag)
+// -> 한 마리씩은 층이 내려갈수록 플레이어보다 조금씩 약해지고, 대신 깊은 층 일반 방에 두 마리가 자주 나온다(NormalPairChances).
 const layerStartIdx = [0, 2, 4], layerBossIdx = [1, 3, 5];
 const base = [classAvg[0].avg];
-const grow = [0];
+const grow = [0], playerGrow = [0];
 for (let L = 1; L < 3; L++) {
-  const playerGrowth = classAvg[layerStartIdx[L]].avg / classAvg[layerStartIdx[L - 1]].avg - 1;
-  const g = Math.min(TARGET.growMax, Math.max(TARGET.growMin, playerGrowth));
-  grow.push(g); base.push(base[L - 1] * (1 + g));
+  const pg = classAvg[layerStartIdx[L]].avg / classAvg[layerStartIdx[L - 1]].avg - 1;
+  const g = Math.max(0, pg - TARGET.growLag);
+  playerGrow.push(pg); grow.push(g); base.push(base[L - 1] * (1 + g));
 }
 
 const INTENT_KO = { Attack: '공격', Defend: '방어', Buff: '강화', Poison: '독', Burn: '화상' };
@@ -498,19 +551,24 @@ for (const r of enemyRows) {
 }
 
 // 검증: 각 층 시작 시점 덱으로 실제 전투 (보스는 보스 직전 덱)
-function validate(table) {
+function validate(baseTable, group) {
+  // 집단 무리원은 EnemyFactory 배율을 적용한 사본으로 싸운다
+  const table = { ...baseTable };
+  const memberId = id => { const e = factoryScale(baseTable[id], group.scale); table[e.id] = e; return e.id; };
+  const groupLabel = group.scale === 1 ? `집단 ${group.count}마리` : `집단 ${group.count}마리(각 1/${group.count})`;
   const out = [];
   for (let L = 0; L < 3; L++) {
     const kinds = [];
     for (const [deck, ci] of [['층 시작 덱', layerStartIdx[L]], ['보스 직전 덱', layerBossIdx[L]]]) {
       kinds.push(
         { kind: '일반 1마리', deck, ci, roll: () => [pick(FLOOR.normal[L])] },
-        { kind: '집단 2마리', deck, ci, roll: () => [pick(FLOOR.normal[L]), pick(FLOOR.normal[L])] },
+        { kind: '일반 2마리', deck, ci, roll: () => [pick(FLOOR.normal[L]), pick(FLOOR.normal[L])] },
+        { kind: groupLabel, group: true, deck, ci, roll: () => Array.from({ length: group.count }, () => memberId(pick(FLOOR.normal[L]))) },
         { kind: '엘리트', deck, ci, roll: () => [pick(FLOOR.elite[L])] },
         { kind: '보스', deck, ci, roll: () => [FLOOR.boss[L]] });
     }
     for (const k of kinds) {
-      const row = { layer: L + 1, kind: k.kind, deck: k.deck, byClass: {} };
+      const row = { layer: L + 1, kind: k.kind, isGroup: !!k.group, deck: k.deck, byClass: {} };
       let wins = 0, n = 0, lost = [];
       for (const cls of classes) {
         let cw = 0, cn = 0;
@@ -529,9 +587,9 @@ function validate(table) {
   return out;
 }
 rng = mulberry32(SEED + 1);
-const validationOld = validate(ENEMIES);
+const validationOld = validate(ENEMIES, OLD_GROUP);
 rng = mulberry32(SEED + 1);
-const validationNew = validate(newEnemies);
+const validationNew = validate(newEnemies, FLOOR.group);
 
 // ---------- 출력 ----------
 const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
@@ -543,7 +601,7 @@ console.log('\n## 직업별 기준 전투력(평균)');
 console.log('| 직업 | ' + CHECKS.join(' | ') + ' |');
 for (const cls of classes) console.log(`| ${PLAYERS[cls].name} | ` + playerStats[cls].map(s => f1(s.avg)).join(' | ') + ' |');
 console.log('\n## 층별 적 기준 전투력 (1층 = 1층 시작 평균, 이후 층은 x(1+g))');
-base.forEach((b, L) => console.log(`${L + 1}층: 기준 ${f1(b)} (g=${p0(grow[L])}, 플레이어 층 시작 평균 ${f1(classAvg[layerStartIdx[L]].avg)})`));
+base.forEach((b, L) => console.log(`${L + 1}층: 기준 ${f1(b)} (적 +${p0(grow[L])}, 플레이어 +${p0(playerGrow[L])}, 플레이어 층 시작 평균 ${f1(classAvg[layerStartIdx[L]].avg)}, 일반 방 2마리 확률 ${p0(FLOOR.pair[L])})`));
 console.log('\n## 적 수치 (기존 -> 새 값)');
 console.log('| 층 | 구분 | 적 | 목표 | HP | 턴당 피해 | 강함(층 시작) | 강함(보스 직전) | 패턴 |');
 for (const r of enemyRows) console.log(`| ${r.layer} | ${r.kind} | ${r.name} | ${p0(r.ratio)} | ${r.oldHp}->${r.newHp} | ${f1(r.oldDpt)}->${f1(r.newDpt)} | ${p0(r.oldRatio)}->${p0(r.newRatio)} | ${p0(r.newRatioAtBoss)} | ${r.newActs} |`);
@@ -555,7 +613,7 @@ validationNew.forEach((v, i) => console.log(`| ${v.layer} | ${v.deck} | ${v.kind
 const result = {
   generatedAt: new Date().toISOString(), runs: RUNS, seed: SEED, target: TARGET, checks: CHECKS,
   classAvg, playerStats: Object.fromEntries(classes.map(c => [PLAYERS[c].name, playerStats[c]])),
-  base, grow, enemyRows, validationOld, validationNew, classNames: classes.map(c => PLAYERS[c].name),
+  base, grow, playerGrow, pair: FLOOR.pair, enemyRows, validationOld, validationNew, classNames: classes.map(c => PLAYERS[c].name), groupOld: OLD_GROUP, groupNew: FLOOR.group,
 };
 fs.writeFileSync(path.join(__dirname, 'result.json'), JSON.stringify(result, null, 1));
 
