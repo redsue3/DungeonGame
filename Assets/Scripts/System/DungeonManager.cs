@@ -220,7 +220,7 @@ public class DungeonManager : MonoBehaviour
         var enemyList = new List<Enemy>();
         foreach (EnemySpawn s in spawns)
         {
-            Enemy e = EnemyFactory.Create(s.enemyTemplateId, s.statScale); // 집단 조우 무리원은 1/3 능력치
+            Enemy e = EnemyFactory.Create(s.enemyTemplateId, s.statScale); // 집단 조우 무리원은 FloorGenerator.GroupMemberScale 능력치
             if (e == null) continue;
             if (s.isMimic) e.characterName = "상자 속 " + e.characterName; // 보물상자에서 튀어나온 적
             MonsterLoreDatabase.MarkDiscovered(s.enemyTemplateId); // 도감: 한 번이라도 맞붙은 적은 설정이 열린다

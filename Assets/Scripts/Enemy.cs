@@ -32,7 +32,7 @@ public class Enemy : Character
     public int  rewardGoldMax;
     public bool isElite;
     public bool isBoss;
-    public float statScale = 1f; // EnemyFactory 능력치 배율 (집단 무리원 1/3) - 경험치도 이 배율을 따른다
+    public float statScale = 1f; // EnemyFactory 능력치 배율 (집단 무리원 FloorGenerator.GroupMemberScale) - 경험치도 이 배율을 따른다
 
     // 시간 기반 전투 (2026-11-11) - 속도 1이면 시간 1마다 한 번, 2면 0.5마다 한 번 행동한다.
     // nextActTime은 BattleManager가 관리하는 전투 시계 기준으로 다음에 행동할 시각.

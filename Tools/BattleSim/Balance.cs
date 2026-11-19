@@ -14,10 +14,13 @@ public static class Balance
     {
         Kind.Normal1 => "일반 1마리",
         Kind.Normal2 => "일반 2마리",
-        Kind.Group   => $"집단 {FloorGenerator.GroupSize}마리(각 1/{FloorGenerator.GroupSize})",
+        Kind.Group   => $"집단 {FloorGenerator.GroupSize}마리(각 {GroupScale:0.##}배)",
         Kind.Elite   => "엘리트",
         _            => "보스",
     };
+
+    // 집단 무리원 능력치 배율 - 기본은 게임 값(FloorGenerator.GroupMemberScale), --group-scale로 바꿔 볼 수 있다
+    public static float GroupScale = FloorGenerator.GroupMemberScale;
 
     // 층별 적 구성은 FloorGenerator의 것을 그대로 쓴다 (private이라 리플렉션으로 부름)
     private static string Call(string method, int layer) =>
@@ -35,7 +38,7 @@ public static class Balance
                 break;
             case Kind.Group:
                 for (int i = 0; i < FloorGenerator.GroupSize; i++)
-                    list.Add(EnemyFactory.Create(FloorGenerator.RandomNormalId(layer), FloorGenerator.GroupMemberScale));
+                    list.Add(EnemyFactory.Create(FloorGenerator.RandomNormalId(layer), GroupScale));
                 break;
             case Kind.Elite: list.Add(EnemyFactory.Create(Call("PickElite", layer))); break;
             case Kind.Boss:  list.Add(EnemyFactory.Create(Call("GetBossId", layer))); break;

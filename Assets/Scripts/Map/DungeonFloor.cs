@@ -29,7 +29,7 @@ public class EnemySpawn
     public bool          isDead;
     public EnemyAiState  state = EnemyAiState.Idle;
     // 능력치 배율 - 전투에 들어갈 때 EnemyFactory가 HP·행동 수치·골드에 곱한다.
-    // 집단 조우 무리원은 FloorGenerator.GroupMemberScale(1/3)이라 셋을 합쳐 일반몹 1마리 몫이 된다.
+    // 집단 조우 무리원은 FloorGenerator.GroupMemberScale(0.6)이라 셋을 합치면 일반몹 1.8마리 몫이 된다.
     public float         statScale = 1f;
 
     // 돌아다니는 엘리트용 - 지금 향하는 방(id)과, 몇 번 걸음마다 한 칸 움직일지 세는 값.

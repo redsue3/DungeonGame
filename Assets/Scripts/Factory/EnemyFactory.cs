@@ -3,7 +3,7 @@ using UnityEngine;
 // EnemyDatabase에서 데이터 불러와 Enemy 인스턴스 생성
 public static class EnemyFactory
 {
-    // statScale: HP·기본 공격력·행동 수치·골드에 곱하는 배율 (집단 조우 무리원은 1/3).
+    // statScale: HP·기본 공격력·행동 수치·골드에 곱하는 배율 (집단 조우 무리원은 FloorGenerator.GroupMemberScale).
     // 반올림 후 최소 1로 둬서 아주 약한 행동도 0이 되지 않게 한다. EnemyDatabase 원본은 건드리지 않는다.
     public static Enemy Create(string enemyId, float statScale = 1f)
     {

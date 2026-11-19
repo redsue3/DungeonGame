@@ -238,7 +238,7 @@ public static class FloorGenerator
                         SpawnOne(floor, room, PickNormal(layer), ref nextId);
                     break;
                 case TileType.GroupEnemy:
-                    // 집단 조우: 일반몹 3마리가 각자 1/3 능력치로 나와서, 셋을 합치면 일반몹 1마리 몫이다 (2026-11-10)
+                    // 집단 조우: 일반몹 3마리가 각자 GroupMemberScale(0.6배) 능력치로 나온다 (2026-11-10 1/3 → 2026-11-19 0.6)
                     for (int i = 0; i < GroupSize; i++)
                         SpawnOne(floor, room, PickNormal(layer), ref nextId, GroupMemberScale);
                     break;
@@ -328,8 +328,11 @@ public static class FloorGenerator
         return options.Count == 0 ? currentRoomId : options[Random.Range(0, options.Count)].id;
     }
 
+    // 집단 무리원 능력치 배율 (HP·행동 수치·골드, 경험치도 이 배율). 셋을 합치면 일반몹 1.8마리 몫.
+    // 2026-11-19 1/3 → 0.6: 1/3일 땐 모든 층·직업 승률 100%에 잃는 체력 0~4%로 너무 쉬웠다(Tools/BattleSim).
+    // 0.6이면 잃는 체력 약 20% - 일반 1마리(약 15%)보다 조금 어렵고 2마리(약 40%)보다 쉽다. Tools/BalanceSim이 이 숫자를 읽는다.
     public const int   GroupSize        = 3;
-    public const float GroupMemberScale = 1f / GroupSize;
+    public const float GroupMemberScale = 0.6f;
 
     // 층별로 일반 방에 두 번째 일반몹이 같이 나올 확률 (1층, 2층, 3층). Tools/BalanceSim이 이 배열을 그대로 읽는다.
     private static readonly float[] NormalPairChances = { 0f, 0.30f, 0.60f };

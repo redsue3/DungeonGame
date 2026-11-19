@@ -147,8 +147,10 @@ function parseFloorEnemies() {
   const bossSeg = /private static string GetBossId[\s\S]*?;/.exec(src)[0];
   const bosses = [...bossSeg.matchAll(/"(\w+)"/g)].map(x => x[1]);
   // 집단 조우 규칙: 무리 수와 무리원 능력치 배율 (상수가 없으면 예전 규칙 = 2마리, 원래 능력치)
+  // GroupMemberScale는 숫자(0.6f) 또는 예전 식(1f / GroupSize) 둘 다 읽는다
   const size = /const int\s+GroupSize\s*=\s*(\d+)/.exec(src);
-  const group = size ? { count: +size[1], scale: 1 / +size[1] } : { count: 2, scale: 1 };
+  const lit = /const float\s+GroupMemberScale\s*=\s*([\d.]+)f\s*;/.exec(src);
+  const group = size ? { count: +size[1], scale: lit ? +lit[1] : 1 / +size[1] } : { count: 2, scale: 1 };
   // 층별 일반 방 두 마리 확률 (배열이 없으면 예전 규칙 = 항상 한 마리)
   const pairSeg = /NormalPairChances\s*=\s*\{([^}]*)\}/.exec(src);
   const pair = pairSeg ? pairSeg[1].split(',').map(s => parseFloat(s)) : [0, 0, 0];
@@ -601,7 +603,7 @@ function validate(baseTable, group) {
   // 집단 무리원은 EnemyFactory 배율을 적용한 사본으로 싸운다
   const table = { ...baseTable };
   const memberId = id => { const e = factoryScale(baseTable[id], group.scale); table[e.id] = e; return e.id; };
-  const groupLabel = group.scale === 1 ? `집단 ${group.count}마리` : `집단 ${group.count}마리(각 1/${group.count})`;
+  const groupLabel = group.scale === 1 ? `집단 ${group.count}마리` : Math.abs(group.scale * group.count - 1) < 1e-6 ? `집단 ${group.count}마리(각 1/${group.count})` : `집단 ${group.count}마리(각 ${group.scale}배)`;
   const out = [];
   for (let L = 0; L < 3; L++) {
     const kinds = [];

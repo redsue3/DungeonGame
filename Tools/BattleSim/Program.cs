@@ -29,6 +29,7 @@ public class Options
                 case "--class":     o.Class = ParseClass(Next()); break;
                 case "--verbose":   UnityEngine.Debug.Verbose = true; break;
                 case "--kite":      Arena.Kite = true; break;
+                case "--group-scale": Balance.GroupScale = F(); break; // 집단 무리원 능력치 배율 바꿔 보기
                 // 시간 규칙을 코드 수정 없이 바꿔 보기 (BattleManager의 static 값)
                 case "--move":          BattleManager.MoveTime = F(); break;
                 case "--card":          BattleManager.CardTime = F(); break;

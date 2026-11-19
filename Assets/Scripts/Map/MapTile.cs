@@ -2,7 +2,7 @@ public enum TileType
 {
     Empty,
     NormalEnemy,   // 일반 조우 (적 1마리)
-    GroupEnemy,    // 집단 조우 (적 3마리, 각자 1/3 능력치라 합치면 일반몹 1마리 몫)
+    GroupEnemy,    // 집단 조우 (적 3마리, 각자 0.6배 능력치라 합치면 일반몹 1.8마리 몫 - FloorGenerator.GroupMemberScale)
     EliteEnemy,    // 엘리트 조우 - 2026-11-11부터 방으로 배정하지 않음 (엘리트는 층을 돌아다님, FloorGenerator.SpawnRoamingElite)
     Boss,          // 보스
     Rest,          // 휴식
