@@ -7,6 +7,8 @@ using System.Linq;
 // 임시 자동 플레이테스트 - 4단계(전투 그리드 통합) 검증용. 확인 후 삭제할 것.
 // UI 클릭 대신 DungeonManager/BattleManager API를 직접 호출해서 게임 로직을 그대로 몰아붙인다.
 // 각 단계에 실시간 워치독(Stopwatch)을 걸어서 무한루프(특히 도주 시 BattleLoop) 발생 시 타임아웃으로 잡아낸다.
+// 2026-11-19 시간 기반 전투에 맞춤: 적이 움직이는 동안(BattleManager.CanAct == false)은 기다리고, 그 프레임은 행동 수에 넣지 않는다.
+// 정비 중에는 카드를 못 쓰니 정비를 넘긴다. Unity 없이 전투 규칙만 빠르게 보려면 Tools/BattleSim을 쓴다.
 public static class PlaytestRunner
 {
     [MenuItem("DungeonGame/__Playtest 실행 (임시)")]
@@ -102,22 +104,27 @@ public class PlaytestDriver : MonoBehaviour
         int actions = 0;
         while (DungeonManager.Instance.CurrentState == GameState.Battle)
         {
-            if (sw.Elapsed.TotalSeconds > 40) { Fail("전투 진행 40초 타임아웃 (교착/무한루프 의심)"); yield break; }
-            if (actions++ > 500) { Fail("전투 500액션 초과 - 종료되지 않음"); yield break; }
+            if (sw.Elapsed.TotalSeconds > 60) { Fail("전투 진행 60초 타임아웃 (교착/무한루프 의심)"); yield break; }
 
-            if (BattleManager.Instance.CurrentState == BattleState.PlayerTurn)
+            var bm = BattleManager.Instance;
+            if (bm.CanAct)
             {
-                var hand = DungeonManager.Instance.Player.deck.GetHand();
+                if (actions++ > 500) { Fail("전투 500액션 초과 - 종료되지 않음"); yield break; }
+
                 bool used = false;
-                for (int i = 0; i < hand.Count; i++)
+                if (bm.Phase == PlayerPhase.Attack)
                 {
-                    if (hand[i].cost <= BattleManager.Instance.CurrentCost)
+                    var hand = DungeonManager.Instance.Player.deck.GetHand();
+                    for (int i = 0; i < hand.Count; i++)
                     {
-                        used = BattleManager.Instance.UseCard(i);
-                        if (used) break;
+                        if (hand[i].cost <= bm.CurrentCost)
+                        {
+                            used = bm.UseCard(i);
+                            if (used) break;
+                        }
                     }
                 }
-                if (!used) BattleManager.Instance.EndPlayerTurn();
+                if (!used) bm.EndPlayerTurn(); // 공격 턴이면 정비 시작, 정비 중이면 정비 넘기기
             }
             yield return null;
         }
@@ -162,10 +169,11 @@ public class PlaytestDriver : MonoBehaviour
         while (DungeonManager.Instance.CurrentState == GameState.Battle)
         {
             if (sw.Elapsed.TotalSeconds > 40) { Fail("도주 시나리오 40초 타임아웃 (BattleLoop 무한루프 의심)"); yield break; }
-            if (turns++ > 80) { Fail("전투 80턴 내 도주/종료 실패"); yield break; }
 
-            if (BattleManager.Instance.CurrentState == BattleState.PlayerTurn)
+            if (BattleManager.Instance.CanAct)
             {
+                if (turns++ > 80) { Fail("전투 80턴 내 도주/종료 실패"); yield break; }
+
                 var floor = DungeonManager.Instance.CurrentFloor;
                 var room = BattleManager.Instance.Room;
                 var ordered = Dirs.OrderByDescending(d =>

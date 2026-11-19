@@ -19,6 +19,12 @@
 //
 // 단순화한 것: 전투 그리드의 이동·접근·사거리(적이 붙기 전 한 턴 허비, 마법사 키이팅), 맵에서 미리 쓰는 카드,
 //              음식, 상점 유물 구매. 힘(strength)은 전투가 끝나면 0으로 돌아간다고 본다 (BattleManager 수정과 같음).
+//
+// 2026-11-11 시간 기반 전투로 바뀐 뒤의 역할 나눔
+//   이 파일: 런을 굴려 덱이 어떻게 자라는지(보상 카드·유물·레벨·마나)와 전투력 비율(적 수치 목표)을 계산한다.
+//            전투 계산(measureBattle, fight)은 예전 턴 방식(플레이어 한 턴 ↔ 적 한 번)의 근사라 승률은 참고용이다.
+//   Tools/BattleSim: 여기서 내보내는 snapshots.json(층 시작·보스 직전 덱 표본)으로 실제 게임 전투 코드를 Unity 없이 돌려
+//            시간 기반 전투의 진짜 승률을 잰다. 적 수치를 --apply로 바꿨다면 BattleSim으로 승률을 다시 확인할 것.
 
 'use strict';
 const fs = require('fs');
@@ -523,6 +529,27 @@ for (const cls of classes) {
       Obad: pct(x.O, 0.10), Ogood: pct(x.O, 0.90) };
   });
 }
+// ---------- Tools/BattleSim용 덱 표본 ----------
+// 체크포인트마다 직업별로 런 SNAPSHOTS_PER_CHECK개의 상태(덱·레벨·유물·마나)를 내보낸다.
+// 카드 데이터에 그대로 있는 카드는 id만, 수치가 바뀐 카드(성장형)나 데이터에 없는 카드(성소 카드)는 수치까지 적는다.
+const SNAPSHOTS_PER_CHECK = 40;
+{
+  const cardEntry = c => {
+    const base = CARDS[c.id];
+    if (base && ['cost', 'dmg', 'blk', 'draw', 'heal', 'str', 'poison', 'burn', 'selfDmg', 'aoe', 'grow', 'buffAtk', 'buffDef', 'range'].every(k => base[k] === c[k])) return c.id;
+    if (base) return { id: c.id, dmg: c.dmg };
+    const o = { id: c.id, name: c.name || c.id, cost: c.cost, type: c.type };
+    for (const k of ['dmg', 'blk', 'draw', 'heal', 'str', 'poison', 'burn', 'selfDmg', 'grow', 'buffAtk', 'buffDef', 'range']) if (c[k]) o[k] = c[k];
+    if (c.aoe) o.aoe = true;
+    return o;
+  };
+  const out = { generatedAt: new Date().toISOString(), seed: SEED, runs: RUNS, checks: CHECKS, classes: {} };
+  for (const cls of classes)
+    out.classes[cls] = sampleRuns[cls].map(list => list.slice(0, SNAPSHOTS_PER_CHECK).map(s =>
+      ({ level: s.level, xp: s.xp, mana: s.mana || 0, relics: s.relics, deck: s.deck.map(cardEntry) })));
+  fs.writeFileSync(path.join(ROOT, 'Tools', 'BattleSim', 'snapshots.json'), JSON.stringify(out));
+}
+
 // 직업 평균 (적은 모든 직업이 공유하므로)
 const classAvg = CHECKS.map((_, ci) => {
   const m = k => classes.reduce((s, c) => s + playerStats[c][ci][k], 0) / classes.length;
@@ -624,7 +651,7 @@ base.forEach((b, L) => console.log(`${L + 1}층: 기준 ${f1(b)} (적 +${p0(grow
 console.log('\n## 적 수치 (기존 -> 새 값)');
 console.log('| 층 | 구분 | 적 | 목표 | HP | 턴당 피해 | 강함(층 시작) | 강함(보스 직전) | 패턴 |');
 for (const r of enemyRows) console.log(`| ${r.layer} | ${r.kind} | ${r.name} | ${p0(r.ratio)} | ${r.oldHp}->${r.newHp} | ${f1(r.oldDpt)}->${f1(r.newDpt)} | ${p0(r.oldRatio)}->${p0(r.newRatio)} | ${p0(r.newRatioAtBoss)} | ${r.newActs} |`);
-console.log('\n## 검증 전투 승률 (기존 -> 새 값)');
+console.log('\n## 검증 전투 승률 (기존 -> 새 값, 예전 턴 방식 근사 - 시간 기반 전투의 실제 승률은 Tools/BattleSim)');
 console.log('| 층 | 덱 | 상대 | 승률 | 이겼을 때 잃은 체력(중앙값) | 직업별 승률(새 값) |');
 validationNew.forEach((v, i) => console.log(`| ${v.layer} | ${v.deck} | ${v.kind} | ${p0(validationOld[i].win)} -> ${p0(v.win)} | ${p0(validationOld[i].hpLostMed)} -> ${p0(v.hpLostMed)} | ` +
   classes.map(c => PLAYERS[c].name + ' ' + p0(v.byClass[c])).join(', ') + ' |'));

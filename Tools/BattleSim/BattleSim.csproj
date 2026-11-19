@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    던전 게임 전투 시뮬레이터 - Unity 없이 실제 게임 스크립트(Assets/Scripts)를 그대로 컴파일해서 돌린다.
+    실행 방법은 README.md. 게임 스크립트를 새로 만들어 전투 코드가 그걸 쓰게 되면 아래 목록에 더한다.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion> <!-- Unity 6과 같은 C# 9 -->
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <NoWarn>CS0414;CS0649;CS0169;CS0067</NoWarn>
+    <RootNamespace>BattleSim</RootNamespace>
+    <GameScripts>..\..\Assets\Scripts\</GameScripts>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 이 도구 -->
+    <Compile Include="UnityShim.cs;Stubs.cs;Program.cs;Snapshots.cs;Arena.cs;Balance.cs;FlowChecks.cs" />
+
+    <!-- 실제 게임 코드 (DungeonManager·UIManager·UI·Editor는 빼고 Stubs.cs로 대신) -->
+    <Compile Include="$(GameScripts)BattleManager.cs" />
+    <Compile Include="$(GameScripts)Card.cs" />
+    <Compile Include="$(GameScripts)Character.cs" />
+    <Compile Include="$(GameScripts)DamageCalculator.cs" />
+    <Compile Include="$(GameScripts)Deck.cs" />
+    <Compile Include="$(GameScripts)Enemy.cs" />
+    <Compile Include="$(GameScripts)Inventory.cs" />
+    <Compile Include="$(GameScripts)PlayerCharacter.cs" />
+    <Compile Include="$(GameScripts)Data\*.cs" />
+    <Compile Include="$(GameScripts)Database\CardDatabase.cs" />
+    <Compile Include="$(GameScripts)Database\EnemyDatabase.cs" />
+    <Compile Include="$(GameScripts)Database\FoodDatabase.cs" />
+    <Compile Include="$(GameScripts)Database\LootTable.cs" />
+    <Compile Include="$(GameScripts)Database\PlayerDatabase.cs" />
+    <Compile Include="$(GameScripts)Database\RelicDatabase.cs" />
+    <Compile Include="$(GameScripts)Database\TreasureTable.cs" />
+    <Compile Include="$(GameScripts)Factory\*.cs" />
+    <Compile Include="$(GameScripts)Map\*.cs" />
+    <Compile Include="$(GameScripts)System\BattleGridSystem.cs" />
+    <Compile Include="$(GameScripts)System\BattleReward.cs" />
+    <Compile Include="$(GameScripts)System\HungerSystem.cs" />
+    <Compile Include="$(GameScripts)System\LevelSystem.cs" />
+    <Compile Include="$(GameScripts)System\RelicData.cs" />
+    <Compile Include="$(GameScripts)System\RelicInventory.cs" />
+  </ItemGroup>
+</Project>
